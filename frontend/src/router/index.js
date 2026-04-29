@@ -16,6 +16,42 @@ const routes = [
         meta: { title: '星盘查询' }
       },
       {
+        path: 'synastry',
+        name: 'Synastry',
+        component: () => import('@/views/SynastryAnalysis.vue'),
+        meta: { title: '双人合盘' }
+      },
+      {
+        path: 'synastry/records',
+        name: 'SynastryRecords',
+        component: () => import('@/views/SynastryRecords.vue'),
+        meta: { title: '合盘记录', requiresAuth: true }
+      },
+      {
+        path: 'synastry/:id',
+        name: 'SynastryDetail',
+        component: () => import('@/views/SynastryAnalysis.vue'),
+        meta: { title: '合盘详情', requiresAuth: true }
+      },
+      {
+        path: 'synastry/share/:code',
+        name: 'SynastryShare',
+        component: () => import('@/views/SynastryAnalysis.vue'),
+        meta: { title: '合盘分享' }
+      },
+      {
+        path: 'horoscope',
+        name: 'Horoscope',
+        component: () => import('@/views/DailyHoroscope.vue'),
+        meta: { title: '每日星运' }
+      },
+      {
+        path: 'transit',
+        name: 'TransitWeather',
+        component: () => import('@/views/TransitWeather.vue'),
+        meta: { title: '星象气象站' }
+      },
+      {
         path: 'login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),
@@ -32,6 +68,12 @@ const routes = [
         name: 'Profile',
         component: () => import('@/views/Profile.vue'),
         meta: { title: '个人中心', requiresAuth: true }
+      },
+      {
+        path: 'my-charts',
+        name: 'MyCharts',
+        component: () => import('@/views/MyCharts.vue'),
+        meta: { title: '我的星盘', requiresAuth: true }
       }
     ]
   },

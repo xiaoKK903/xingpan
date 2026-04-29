@@ -9,3 +9,7 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 aiohttp==3.9.1
 pyswisseph==2.10.3.2
+reportlab==4.0.8
+redis==5.0.1
+timezonefinder==6.2.0
+pytz==2024.1

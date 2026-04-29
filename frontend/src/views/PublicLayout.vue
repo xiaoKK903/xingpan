@@ -10,6 +10,36 @@
             </div>
             <span class="logo-text">星盘查询系统</span>
           </router-link>
+          <div class="nav-links">
+            <router-link 
+              to="/astro" 
+              class="nav-link"
+              :class="{ active: route.path === '/astro' }"
+            >
+              单人星盘
+            </router-link>
+            <router-link 
+              to="/synastry" 
+              class="nav-link"
+              :class="{ active: route.path === '/synastry' }"
+            >
+              双人合盘
+            </router-link>
+            <router-link 
+              to="/horoscope" 
+              class="nav-link"
+              :class="{ active: route.path === '/horoscope' }"
+            >
+              每日星运
+            </router-link>
+            <router-link 
+              to="/transit" 
+              class="nav-link"
+              :class="{ active: route.path === '/transit' }"
+            >
+              星象气象
+            </router-link>
+          </div>
         </div>
         <div class="header-right">
           <template v-if="!userStore.isLoggedIn">
@@ -39,6 +69,10 @@
             </el-dropdown>
           </template>
           <template v-else>
+            <button class="nav-btn nav-btn-link" @click="goToMyCharts">
+              <el-icon><Star /></el-icon>
+              我的星盘
+            </button>
             <button class="nav-btn nav-btn-primary" @click="goToProfile">
               <el-icon><User /></el-icon>
               个人中心
@@ -53,6 +87,7 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu class="custom-dropdown-menu">
+                  <el-dropdown-item command="charts">我的星盘</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -91,6 +126,10 @@ function goToAdmin() {
   router.push('/admin/chat')
 }
 
+function goToMyCharts() {
+  router.push('/my-charts')
+}
+
 function goToProfile() {
   router.push('/profile')
 }
@@ -99,6 +138,9 @@ function handleCommand(command) {
   switch (command) {
     case 'admin':
       router.push('/admin/chat')
+      break
+    case 'charts':
+      router.push('/my-charts')
       break
     case 'profile':
       router.push('/profile')
@@ -148,6 +190,10 @@ function handleCommand(command) {
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  
   .logo-link {
     display: flex;
     align-items: center;
@@ -178,6 +224,34 @@ function handleCommand(command) {
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+    }
+  }
+  
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 24px;
+    border-left: 1px solid rgba(139, 92, 246, 0.2);
+  }
+  
+  .nav-link {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: rgba(139, 92, 246, 0.15);
+      color: rgba(255, 255, 255, 0.9);
+    }
+    
+    &.active {
+      background: rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
     }
   }
 }
@@ -275,6 +349,8 @@ function handleCommand(command) {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
 }
 </style>

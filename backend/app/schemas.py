@@ -98,3 +98,56 @@ class ChatResponse(BaseModel):
     conversation_id: int
     user_message: MessageResponse
     assistant_message: MessageResponse
+
+
+class ChartCreate(BaseModel):
+    name: Optional[str] = Field(None, max_length=100, description="星盘名称/备注")
+    birth_date: str = Field(..., description="出生日期 YYYY-MM-DD")
+    birth_time: str = Field(..., description="出生时间 HH:MM")
+    birth_place: Optional[str] = Field(None, max_length=100, description="出生地点")
+    latitude: float = Field(..., description="纬度")
+    longitude: float = Field(..., description="经度")
+    house_system: str = Field("placidus", description="宫位系统: placidus/whole_sign")
+
+
+class ChartUpdate(BaseModel):
+    name: Optional[str] = None
+    birth_date: Optional[str] = None
+    birth_time: Optional[str] = None
+    birth_place: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    house_system: Optional[str] = None
+
+
+class ChartResponse(BaseModel):
+    id: int
+    user_id: int
+    name: Optional[str]
+    birth_date: str
+    birth_time: str
+    birth_place: Optional[str]
+    latitude: float
+    longitude: float
+    house_system: str
+    chart_data: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class SynastryPersonInput(BaseModel):
+    name: Optional[str] = Field(None, max_length=50, description="人物名称")
+    birth_date: str = Field(..., description="出生日期 YYYY-MM-DD")
+    birth_time: str = Field(..., description="出生时间 HH:MM")
+    birth_place: Optional[str] = Field(None, max_length=100, description="出生地点")
+    latitude: float = Field(..., description="纬度")
+    longitude: float = Field(..., description="经度")
+    house_system: str = Field("placidus", description="宫位系统: placidus/whole_sign")
+
+
+class SynastryCalculateRequest(BaseModel):
+    person_a: SynastryPersonInput = Field(..., description="人物A的星盘信息")
+    person_b: SynastryPersonInput = Field(..., description="人物B的星盘信息")

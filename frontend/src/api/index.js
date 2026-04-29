@@ -205,4 +205,145 @@ export const geoApi = {
   }
 }
 
+export const chartApi = {
+  saveChart(data) {
+    return request.post('/charts', data)
+  },
+  getMyCharts(params = {}) {
+    return request.get('/charts', { params })
+  },
+  getChartById(id) {
+    return request.get(`/charts/${id}`)
+  },
+  updateChart(id, data) {
+    return request.put(`/charts/${id}`, data)
+  },
+  deleteChart(id) {
+    return request.delete(`/charts/${id}`)
+  }
+}
+
+export const reportApi = {
+  getInterpretation(chartId) {
+    return request.get(`/reports/interpretation/${chartId}`)
+  },
+  getPdfReport(chartId, template = 'detailed') {
+    return request.get(`/reports/pdf/${chartId}`, {
+      params: { template },
+      responseType: 'blob'
+    })
+  },
+  generatePdfDirect(chartInput, template = 'detailed') {
+    return request.post('/reports/pdf/generate', chartInput, {
+      params: { template },
+      responseType: 'blob'
+    })
+  },
+  generateInterpretationDirect(chartInput) {
+    return request.post('/reports/interpretation/generate', chartInput)
+  },
+  generatePdfWithInterpretation(chartInput, template = 'detailed') {
+    return request.post('/reports/pdf/generate-with-interpretation', chartInput, {
+      params: { template }
+    })
+  },
+  getTemplates() {
+    return request.get('/reports/templates')
+  }
+}
+
+export const synastryApi = {
+  calculateSynastry(data) {
+    return request.post('/synastry/calculate', data)
+  },
+  testSynastry() {
+    return request.get('/synastry/test')
+  },
+  calculateAndAnalyze(data) {
+    return request.post('/synastry-analysis/calculate-and-analyze', data)
+  },
+  saveRecord(data) {
+    return request.post('/synastry-analysis/save', data)
+  },
+  getList(params = {}) {
+    return request.get('/synastry-analysis/list', { params })
+  },
+  getById(id) {
+    return request.get(`/synastry-analysis/${id}`)
+  },
+  update(id, data) {
+    return request.put(`/synastry-analysis/${id}`, data)
+  },
+  delete(id) {
+    return request.delete(`/synastry-analysis/${id}`)
+  },
+  generateShare(id) {
+    return request.post(`/synastry-analysis/${id}/generate-share`)
+  },
+  getByShareCode(shareCode) {
+    return request.get(`/synastry-analysis/share/${shareCode}`)
+  }
+}
+
+export const aiInterpretationApi = {
+  generateInterpretation(data) {
+    return request.post('/ai/interpret', data)
+  },
+  generateInterpretationDirect(data) {
+    return request.post('/ai/interpret/direct', data)
+  },
+  checkHealth() {
+    return request.get('/ai/health')
+  },
+  testConnection(data) {
+    return request.post('/ai/test', data)
+  }
+}
+
+export const horoscopeApi = {
+  getDailyHoroscope(sign, date = null) {
+    const params = { sign }
+    if (date) {
+      params.date = date
+    }
+    return request.get('/horoscope/today', { params })
+  },
+  getPersonalHoroscope(date = null) {
+    const params = {}
+    if (date) {
+      params.date = date
+    }
+    return request.get('/horoscope/personal', { params })
+  },
+  getZodiacSigns() {
+    return request.get('/horoscope/signs')
+  }
+}
+
+export const transitApi = {
+  calculateTransit(data) {
+    return request.post('/transit/calculate', data)
+  },
+  get7DayTrend(data) {
+    return request.post('/transit/trend', data)
+  },
+  getAIInterpretation(data) {
+    return request.post('/transit/interpret', data)
+  },
+  getPersonalTransit(targetDate = null) {
+    const params = {}
+    if (targetDate) {
+      params.target_date = targetDate
+    }
+    return request.get('/transit/personal', { params })
+  },
+  getPersonalTrend(startDate = null) {
+    const params = {}
+    if (startDate) {
+      params.start_date = startDate
+    }
+    return request.get('/transit/personal/trend', { params })
+  }
+}
+
 export default request

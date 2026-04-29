@@ -297,7 +297,7 @@
           </div>
         </div>
 
-        <el-transition name="fade">
+        <Transition name="fade">
           <div v-if="showResult" class="result-card-wrapper">
             <div class="result-card">
               <div class="result-card-border-glow"></div>
@@ -306,9 +306,116 @@
                   <div class="result-icon">
                     <el-icon size="24"><Star /></el-icon>
                   </div>
-                  <div>
+                  <div class="result-title-wrapper">
                     <h3 class="result-title">你的星盘解读</h3>
                     <p class="result-subtitle">{{ astroForm.name || '用户' }} · {{ astroForm.birthPlace || '未知地点' }}</p>
+                  </div>
+                  <div class="result-actions">
+                    <button 
+                      v-if="isLoggedIn"
+                      class="save-chart-btn"
+                      :class="{ 'btn-loading': saving }"
+                      :disabled="saving"
+                      @click="saveChart"
+                    >
+                      <el-icon v-if="saving"><Loading /></el-icon>
+                      <span v-else>保存星盘</span>
+                    </button>
+                    <button 
+                      v-else
+                      class="login-hint-btn"
+                      @click="router.push('/login')"
+                    >
+                      登录保存
+                    </button>
+                    
+                    <div class="export-dropdown" :class="{ active: showExportMenu }">
+                      <button 
+                        class="export-btn"
+                        :class="{ 'btn-loading': exporting }"
+                        :disabled="exporting"
+                        @click="toggleExportMenu"
+                      >
+                        <el-icon><Download /></el-icon>
+                        <span>导出</span>
+                        <el-icon class="caret-icon" :class="{ rotated: showExportMenu }">
+                          <CaretBottom />
+                        </el-icon>
+                      </button>
+                      
+                      <Transition name="fade">
+                        <div v-if="showExportMenu" class="export-menu">
+                          <div class="export-section">
+                            <div class="export-section-title">导出图片</div>
+                            <div class="export-options">
+                              <label 
+                                v-for="fmt in exportFormats" 
+                                :key="fmt.id"
+                                class="export-option"
+                                :class="{ selected: selectedExportFormat === fmt.id }"
+                              >
+                                <input 
+                                  type="radio" 
+                                  :value="fmt.id" 
+                                  v-model="selectedExportFormat"
+                                  class="option-input"
+                                />
+                                <span class="option-label">{{ fmt.name }}</span>
+                                <span class="option-desc">{{ fmt.description }}</span>
+                              </label>
+                            </div>
+                            <button 
+                              class="export-action-btn"
+                              :disabled="exporting"
+                              @click="exportChartAsImage"
+                            >
+                              <el-icon v-if="exporting"><Loading /></el-icon>
+                              <span v-else>导出图片</span>
+                            </button>
+                          </div>
+                          
+                          <div class="export-divider"></div>
+                          
+                          <div class="export-section">
+                            <div class="export-section-title">导出 PDF 报告</div>
+                            <div class="export-options">
+                              <label 
+                                v-for="tpl in reportTemplates" 
+                                :key="tpl.id"
+                                class="export-option"
+                                :class="{ selected: selectedReportTemplate === tpl.id }"
+                              >
+                                <input 
+                                  type="radio" 
+                                  :value="tpl.id" 
+                                  v-model="selectedReportTemplate"
+                                  class="option-input"
+                                />
+                                <span class="option-label">{{ tpl.name }}</span>
+                                <span class="option-desc">{{ tpl.description }}</span>
+                              </label>
+                            </div>
+                            <button 
+                              class="export-action-btn primary"
+                              :disabled="exporting || !selectedChartId"
+                              @click="exportChartAsPDF"
+                            >
+                              <el-icon v-if="exporting"><Loading /></el-icon>
+                              <span v-else>导出 PDF 报告</span>
+                            </button>
+                            <p v-if="!selectedChartId" class="export-hint">
+                              请先保存星盘后再导出 PDF 报告
+                            </p>
+                          </div>
+                        </div>
+                      </Transition>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="chart-wheel-section">
+                  <div class="chart-wheel-container">
+                    <ChartWheel v-if="chartData" :chart-data="chartData" />
                   </div>
                 </div>
 
@@ -462,16 +569,65 @@
               </div>
             </div>
           </div>
-        </el-transition>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showResult" class="ai-interpretation-wrapper">
+            <AIInterpretation
+              :chart-data="chartData"
+              :chart-input="astroForm"
+            />
+          </div>
+        </Transition>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { astroApi, geoApi } from '@/api'
+import { astroApi, geoApi, chartApi, reportApi } from '@/api'
+import { useUserStore } from '@/stores/user'
+import ChartWheel from '@/components/ChartWheel.vue'
+import AIInterpretation from '@/components/AIInterpretation.vue'
+import { exportAsPNG, exportAsJPG, generateChartFilename, downloadBlob } from '@/utils/exportUtils'
+import { Download, CaretBottom, Loading } from '@element-plus/icons-vue'
+
+const router = useRouter()
+const userStore = useUserStore()
+
+const isLoggedIn = computed(() => userStore.isLoggedIn || !!localStorage.getItem('token'))
+
+const saving = ref(false)
+const calculating = ref(false)
+const exporting = ref(false)
+const showResult = ref(false)
+const activeTab = ref('planets')
+const chartData = ref(null)
+const selectedChartId = ref(null)
+
+const showExportMenu = ref(false)
+const selectedExportFormat = ref('png_hd')
+const selectedReportTemplate = ref('detailed')
+
+const exportFormats = [
+  { id: 'png_hd', name: '高清 PNG', format: 'png', scale: 3, description: '3倍分辨率' },
+  { id: 'png_standard', name: '标准 PNG', format: 'png', scale: 2, description: '2倍分辨率' },
+  { id: 'jpg_hd', name: '高清 JPG', format: 'jpg', scale: 3, description: '高画质' }
+]
+
+const reportTemplates = [
+  { id: 'detailed', name: '详细版', description: '包含完整解读' },
+  { id: 'simple', name: '简洁版', description: '快速概览' }
+]
+
+const cityInput = ref('北京')
+const queryStatus = ref('')
+const queryMessage = ref('')
+const showManualCoords = ref(false)
+let debounceTimer = null
 
 const CITIES_DB = [
   { id: 'beijing', name: '北京', nameEn: 'Beijing', country: '中国', state: '北京市', latitude: 39.9042, longitude: 116.4074 },
@@ -557,21 +713,12 @@ const QUICK_CITIES = [
   { id: 'hangzhou', name: '杭州' },
 ]
 
-const calculating = ref(false)
-const showResult = ref(false)
-const activeTab = ref('planets')
-const chartData = ref(null)
-
-const cityInput = ref('北京')
-const queryStatus = ref('')
-const queryMessage = ref('')
-const showManualCoords = ref(false)
-let debounceTimer = null
+const majorCities = computed(() => CITIES_DB.slice(0, 8))
 
 const astroForm = reactive({
   name: '',
-  birthDate: '',
-  birthTime: '',
+  birthDate: '1990-01-01',
+  birthTime: '12:00',
   birthPlace: '北京',
   longitude: 116.4074,
   latitude: 39.9042,
@@ -828,6 +975,149 @@ async function calculateAstro() {
     ElMessage.error(error.message || '星盘计算失败')
   } finally {
     calculating.value = false
+  }
+}
+
+async function saveChart() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再保存星盘')
+    return
+  }
+  
+  if (!chartData.value) {
+    ElMessage.warning('请先计算星盘')
+    return
+  }
+  
+  saving.value = true
+  
+  try {
+    const result = await chartApi.saveChart({
+      name: astroForm.name || '未命名星盘',
+      birth_date: astroForm.birthDate,
+      birth_time: astroForm.birthTime,
+      birth_place: astroForm.birthPlace,
+      latitude: astroForm.latitude,
+      longitude: astroForm.longitude,
+      house_system: astroForm.houseSystem,
+      chart_data: JSON.stringify(chartData.value)
+    })
+    
+    if (result?.id) {
+      selectedChartId.value = result.id
+    }
+    
+    ElMessage.success('星盘已保存到「我的星盘」')
+  } catch (error) {
+    console.error('保存失败:', error)
+    ElMessage.error(error.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function exportChartAsImage() {
+  if (!chartData.value) {
+    ElMessage.warning('请先计算星盘')
+    return
+  }
+  
+  exporting.value = true
+  
+  try {
+    await nextTick()
+    
+    const chartContainer = document.querySelector('.chart-wheel-wrapper')
+    if (!chartContainer) {
+      ElMessage.error('未找到星盘元素')
+      return
+    }
+    
+    const formatInfo = exportFormats.find(f => f.id === selectedExportFormat.value)
+    const format = formatInfo || exportFormats[0]
+    
+    const chartDataForFilename = {
+      name: astroForm.name || '星盘',
+      input: {
+      date: astroForm.birthDate
+    }
+  }
+    const filename = generateChartFilename(chartDataForFilename, format.format)
+    
+    if (format.format === 'jpg') {
+      await exportAsJPG(chartContainer, filename, 0.9, { scale: format.scale })
+    } else {
+      await exportAsPNG(chartContainer, filename, { scale: format.scale })
+    }
+    
+    ElMessage.success(`已导出: ${filename}`)
+  } catch (error) {
+    console.error('导出图片失败:', error)
+    ElMessage.error('导出图片失败: ' + error.message)
+  } finally {
+    exporting.value = false
+    showExportMenu.value = false
+  }
+}
+
+async function exportChartAsPDF() {
+  if (!chartData.value) {
+    ElMessage.warning('请先计算星盘')
+    return
+  }
+  
+  exporting.value = true
+  
+  try {
+    let blob
+    const templateName = selectedReportTemplate.value === 'detailed' ? '详细版' : '简洁版'
+    const chartDataForFilename = {
+      name: astroForm.name || '星盘',
+      birth_date: astroForm.birthDate
+    }
+    const filename = generateChartFilename(chartDataForFilename, 'pdf').replace('.pdf', `_${templateName}.pdf`)
+    
+    if (isLoggedIn.value && selectedChartId.value) {
+      blob = await reportApi.getPdfReport(selectedChartId.value, selectedReportTemplate.value)
+    } else {
+      const reportInput = {
+        name: astroForm.name || '星盘',
+        birth_date: astroForm.birthDate,
+        birth_time: astroForm.birthTime,
+        latitude: astroForm.latitude,
+        longitude: astroForm.longitude,
+        birth_place: astroForm.birthPlace || '',
+        house_system: astroForm.houseSystem
+      }
+      
+      blob = await reportApi.generatePdfDirect(reportInput, selectedReportTemplate.value)
+    }
+    
+    downloadBlob(blob, filename)
+    ElMessage.success(`PDF 报告已导出: ${filename}`)
+  } catch (error) {
+    console.error('导出 PDF 失败:', error)
+    ElMessage.error('导出 PDF 报告失败: ' + (error.message || '未知错误'))
+  } finally {
+    exporting.value = false
+    showExportMenu.value = false
+  }
+}
+
+function toggleExportMenu() {
+  showExportMenu.value = !showExportMenu.value
+}
+
+function selectQuickCity(city) {
+  const found = CITIES_DB.find(c => c.id === city.id)
+  if (found) {
+    cityInput.value = found.name
+    queryStatus.value = 'valid'
+    queryMessage.value = `已选择: ${found.name} (${found.country || ''})`
+    
+    astroForm.birthPlace = found.name
+    astroForm.latitude = found.latitude
+    astroForm.longitude = found.longitude
   }
 }
 </script>
@@ -1809,6 +2099,10 @@ async function calculateAstro() {
   color: #a78bfa;
 }
 
+.result-title-wrapper {
+  flex: 1;
+}
+
 .result-title {
   margin: 0;
   color: rgba(255, 255, 255, 0.9);
@@ -1820,6 +2114,255 @@ async function calculateAstro() {
   margin: 0;
   color: rgba(255, 255, 255, 0.45);
   font-size: 0.75rem;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.save-chart-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.2));
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 8px;
+  color: #4ade80;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(16, 185, 129, 0.3));
+    border-color: rgba(34, 197, 94, 0.6);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  &.btn-loading {
+    .el-icon {
+      animation: spin 1s linear infinite;
+    }
+  }
+}
+
+.login-hint-btn {
+  padding: 8px 16px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  color: #a78bfa;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+}
+
+.export-dropdown {
+  position: relative;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(99, 102, 241, 0.2));
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+  color: #60a5fa;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(99, 102, 241, 0.3));
+    border-color: rgba(59, 130, 246, 0.6);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  &.btn-loading {
+    .el-icon {
+      animation: spin 1s linear infinite;
+    }
+  }
+}
+
+.caret-icon {
+  transition: transform 0.3s ease;
+  
+  &.rotated {
+    transform: rotate(180deg);
+  }
+}
+
+.export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 280px;
+  background: rgba(15, 15, 35, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  z-index: 1000;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 60px rgba(139, 92, 246, 0.1);
+  animation: fadeInDown 0.2s ease;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 4px;
+}
+
+.export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.export-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(30, 30, 60, 0.5);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+  
+  &.selected {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+}
+
+.option-input {
+  margin: 0;
+  accent-color: #8b5cf6;
+}
+
+.option-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.option-desc {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: auto;
+}
+
+.export-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+  margin: 12px 0;
+}
+
+.export-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(99, 102, 241, 0.2));
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 8px;
+  color: #a78bfa;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 6px;
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(99, 102, 241, 0.3));
+    border-color: rgba(139, 92, 246, 0.6);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  &.primary {
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    border-color: transparent;
+    color: #fff;
+    
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    }
+  }
+}
+
+.export-hint {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.chart-wheel-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+  border-radius: 16px;
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.chart-wheel-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .big-three-section {
@@ -2168,5 +2711,15 @@ async function calculateAstro() {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+.ai-interpretation-wrapper {
+  flex-shrink: 0;
+  width: 520px;
+  
+  @media (max-width: 900px) {
+    width: 100%;
+    max-width: 520px;
+  }
 }
 </style>

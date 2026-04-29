@@ -1,10 +1,17 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+
 import bcrypt
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.models import User
 from app.config import settings
+from app.database import Base
 
 engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+Base.metadata.create_all(bind=engine)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 ADMIN_USERNAME = "admin"
@@ -34,6 +41,28 @@ def create_admin():
             email=ADMIN_EMAIL,
             hashed_password=hashed_password,
             is_active=True,
+            is_superuser=True
+        )
+        
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+        
+        print("=" * 50)
+        print("管理员账号创建成功！")
+        print("=" * 50)
+        print(f"用户名: {ADMIN_USERNAME}")
+        print(f"密码: {ADMIN_PASSWORD}")
+        print(f"邮箱: {ADMIN_EMAIL}")
+        print("=" * 50)
+    except Exception as e:
+        print(f"创建失败: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    create_admin()
             is_superuser=True
         )
         
