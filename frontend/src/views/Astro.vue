@@ -414,8 +414,37 @@
                 </div>
 
                 <div class="chart-wheel-section">
-                  <div class="chart-wheel-container">
-                    <ChartWheel v-if="chartData" :chart-data="chartData" />
+                  <div class="chart-mode-switch">
+                    <button 
+                      class="mode-btn"
+                      :class="{ active: !use3DChart }"
+                      @click="use3DChart = false"
+                    >
+                      <span class="mode-icon">📋</span>
+                      <span>经典 2D</span>
+                    </button>
+                    <button 
+                      class="mode-btn"
+                      :class="{ active: use3DChart }"
+                      @click="use3DChart = true"
+                    >
+                      <span class="mode-icon">🌌</span>
+                      <span>3D 宇宙球</span>
+                    </button>
+                  </div>
+                  <div class="chart-wheel-container" :class="{ 'chart-3d': use3DChart }">
+                    <Transition name="fade" mode="out-in">
+                      <ThreeAstroSphere 
+                        v-if="chartData && use3DChart" 
+                        :chart-data="chartData" 
+                        key="3d"
+                      />
+                      <ChartWheel 
+                        v-else-if="chartData && !use3DChart" 
+                        :chart-data="chartData" 
+                        key="2d"
+                      />
+                    </Transition>
                   </div>
                 </div>
 
@@ -591,6 +620,7 @@ import { ElMessage } from 'element-plus'
 import { astroApi, geoApi, chartApi, reportApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import ChartWheel from '@/components/ChartWheel.vue'
+import ThreeAstroSphere from '@/components/ThreeAstroSphere.vue'
 import AIInterpretation from '@/components/AIInterpretation.vue'
 import { exportAsPNG, exportAsJPG, generateChartFilename, downloadBlob } from '@/utils/exportUtils'
 import { Download, CaretBottom, Loading } from '@element-plus/icons-vue'
@@ -611,6 +641,8 @@ const selectedChartId = ref(null)
 const showExportMenu = ref(false)
 const selectedExportFormat = ref('png_hd')
 const selectedReportTemplate = ref('detailed')
+
+const use3DChart = ref(true)
 
 const exportFormats = [
   { id: 'png_hd', name: '高清 PNG', format: 'png', scale: 3, description: '3倍分辨率' },
@@ -1872,7 +1904,15 @@ function selectQuickCity(city) {
   
   &.active {
     border-color: rgba(139, 92, 246, 0.6);
-    background: rgba(139, 92, 246, 0.1);
+    background: rgba(139, 92, 246, 0.25);
+    
+    .radio-name {
+      color: #c4b5fd;
+    }
+    
+    .radio-desc {
+      color: rgba(196, 181, 253, 0.7);
+    }
   }
 }
 
@@ -2363,6 +2403,52 @@ function selectQuickCity(city) {
   display: flex;
   justify-content: center;
   align-items: center;
+  min-height: 550px;
+  height: auto;
+}
+
+.chart-mode-switch {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(30, 30, 60, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.mode-btn:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+.mode-icon {
+  font-size: 1rem;
+}
+
+.chart-3d {
+  min-height: 550px;
 }
 
 .big-three-section {

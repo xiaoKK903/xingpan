@@ -151,3 +151,22 @@ class SynastryPersonInput(BaseModel):
 class SynastryCalculateRequest(BaseModel):
     person_a: SynastryPersonInput = Field(..., description="人物A的星盘信息")
     person_b: SynastryPersonInput = Field(..., description="人物B的星盘信息")
+
+
+class GroupMemberInput(BaseModel):
+    name: str = Field(..., max_length=100, description="成员名称")
+    birth_date: str = Field(..., description="出生日期 YYYY-MM-DD")
+    birth_time: str = Field(..., description="出生时间 HH:MM")
+    birth_place: Optional[str] = Field(None, max_length=100, description="出生地点")
+    latitude: float = Field(..., description="纬度")
+    longitude: float = Field(..., description="经度")
+    house_system: str = Field("placidus", description="宫位系统: placidus/whole_sign")
+    is_core: bool = Field(False, description="是否为核心成员")
+    weight: float = Field(1.0, description="权重，核心成员权重更高")
+
+
+class GroupMatrixCalculateRequest(BaseModel):
+    group_name: str = Field("未命名群组", max_length=200, description="群组名称")
+    group_type: str = Field("other", description="群组类型: team/friends/roommates/lovers/other")
+    description: Optional[str] = Field(None, description="群组描述")
+    members: List[GroupMemberInput] = Field(..., min_items=2, description="成员列表，至少2人")

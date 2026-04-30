@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     DASHSCOPE_API_KEY: Optional[str] = None
     QWEN_MODEL: str = "qwen-max"
     
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_MODEL: str = "deepseek-v4-pro"
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    
     REDIS_URL: Optional[str] = None
     REDIS_DEFAULT_TTL: int = 1800
 

@@ -7,7 +7,11 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 DASHSCOPE_OPENAI_COMPATIBLE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+DEEPSEEK_OPENAI_COMPATIBLE_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "qwen3.6-plus"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro"
+FAST_DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_QWEN_FAST_MODEL = "qwen-plus"
 
 SYSTEM_PROMPT = """你是一位专业的占星师，拥有深厚的占星学知识和丰富的解读经验。请根据用户提供的星盘配置，用中文进行专业、深入且易于理解的解读。
 
@@ -373,3 +377,166 @@ def parse_interpretation_sections(content: str) -> Dict[str, str]:
         sections["raw"] = content
     
     return sections
+
+
+def get_deepseek_api_key_status() -> Dict[str, Any]:
+    """检查DeepSeek API key状态"""
+    if not settings.DEEPSEEK_API_KEY:
+        return {
+            "configured": False,
+            "key_length": 0,
+            "key_prefix": None,
+            "message": "DEEPSEEK_API_KEY 未配置"
+        }
+    
+    key = settings.DEEPSEEK_API_KEY
+    return {
+        "configured": True,
+        "key_length": len(key),
+        "key_prefix": key[:15] + "..." if len(key) > 15 else key,
+        "message": "DeepSeek API key 已配置"
+    }
+
+
+async def call_deepseek_api(
+    prompt: str,
+    system_prompt: str = "你是一位专业的故事讲述者和占星师，请用中文为用户提供人生剧本风格的解读。",
+    model: str = None,
+    temperature: float = 0.85,
+    max_tokens: int = 4000,
+    reasoning_effort: str = "high",
+    fast_mode: bool = False
+) -> str:
+    """
+    调用 DeepSeek API（OpenAI 兼容模式）
+    
+    Args:
+        prompt: 用户提示词
+        system_prompt: 系统提示词
+        model: 模型名称（默认使用配置中的 DEEPSEEK_MODEL）
+        temperature: 温度参数
+        max_tokens: 最大token数
+        reasoning_effort: 推理努力程度（high/medium/low）
+        fast_mode: 快速模式 - 使用更快的模型，禁用 thinking，减少超时时间
+    
+    Returns:
+        模型生成的文本内容
+    """
+    api_status = get_deepseek_api_key_status()
+    logger.info(f"DeepSeek API key 状态: {api_status}")
+    
+    if not settings.DEEPSEEK_API_KEY:
+        error_msg = "DeepSeek API key 未配置。请在 backend/.env 文件中设置 DEEPSEEK_API_KEY"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    base_url = settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com"
+    api_url = f"{base_url}/chat/completions"
+    
+    if fast_mode:
+        use_model = FAST_DEEPSEEK_MODEL
+        timeout = 120.0
+        use_reasoning = False
+        logger.info(f"快速模式启用，使用模型: {use_model}，超时: {timeout}秒")
+    else:
+        use_model = model or settings.DEEPSEEK_MODEL or DEFAULT_DEEPSEEK_MODEL
+        timeout = 300.0
+        use_reasoning = True
+        logger.info(f"使用 DeepSeek 模型: {use_model}，超时: {timeout}秒")
+    
+    headers = {
+        "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": use_model,
+        "messages": [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+    
+    if use_reasoning and reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+        payload["extra_body"] = {
+            "thinking": {
+                "type": "enabled"
+            }
+        }
+    
+    logger.info(f"开始调用 DeepSeek API")
+    logger.info(f"请求URL: {api_url}")
+    logger.info(f"请求负载: model={use_model}, 提示词长度={len(prompt)}字符, max_tokens={max_tokens}")
+    
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                api_url,
+                headers=headers,
+                json=payload
+            )
+            
+            logger.info(f"DeepSeek API 响应状态码: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_body = response.text
+                logger.error(f"DeepSeek API 调用失败: {response.status_code}")
+                logger.error(f"错误响应: {error_body[:2000] if len(error_body) > 2000 else error_body}")
+                
+                try:
+                    error_json = response.json()
+                    error_message = error_json.get("error", {}).get("message", "") or error_json.get("message", "") or error_body
+                    
+                    if response.status_code == 401:
+                        raise Exception(f"DeepSeek API 认证失败: 请检查 API key 是否正确。错误信息: {error_message}")
+                    elif response.status_code == 403:
+                        raise Exception(f"DeepSeek API 访问被拒绝: 可能是账户余额不足或权限问题。错误信息: {error_message}")
+                    elif response.status_code == 429:
+                        raise Exception(f"DeepSeek API 调用频率超限: 请稍后再试。错误信息: {error_message}")
+                    elif response.status_code == 500:
+                        raise Exception(f"DeepSeek API 服务器内部错误: 请稍后再试。错误信息: {error_message}")
+                    else:
+                        raise Exception(f"DeepSeek API 调用失败 (HTTP {response.status_code}): {error_message}")
+                        
+                except json.JSONDecodeError:
+                    raise Exception(f"DeepSeek API 调用失败 (HTTP {response.status_code}): {error_body}")
+            
+            result = response.json()
+            logger.info("DeepSeek API 响应解析成功")
+            
+            try:
+                content = result["choices"][0]["message"]["content"]
+                logger.info(f"成功获取 DeepSeek AI 回复，长度: {len(content)} 字符")
+                
+                thinking_content = result["choices"][0].get("message", {}).get("reasoning_content", "")
+                if thinking_content:
+                    logger.debug(f"DeepSeek 推理过程: {thinking_content[:500]}...")
+                
+                return content
+            except (KeyError, IndexError) as e:
+                logger.error(f"解析 DeepSeek API 响应失败: {str(e)}")
+                logger.error(f"响应结构: {json.dumps(result, ensure_ascii=False, default=str)}")
+                raise Exception(f"解析 DeepSeek API 响应失败: 响应格式不符合预期。")
+                
+    except httpx.ConnectError as e:
+        logger.error(f"DeepSeek API 网络连接错误: {str(e)}")
+        raise Exception(f"网络连接失败: 无法连接到 DeepSeek API 服务器。请检查网络连接。")
+    except httpx.TimeoutException:
+        logger.error("DeepSeek API 请求超时")
+        if fast_mode:
+            raise Exception(f"API 请求超时: DeepSeek 快速模式仍超时。请检查网络或稍后重试。")
+        else:
+            raise Exception(f"API 请求超时: DeepSeek 服务器响应时间过长。可以尝试使用快速模式。")
+    except Exception as e:
+        logger.error(f"DeepSeek API 调用异常: {str(e)}")
+        raise

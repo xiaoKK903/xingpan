@@ -74,6 +74,54 @@ const routes = [
         name: 'MyCharts',
         component: () => import('@/views/MyCharts.vue'),
         meta: { title: '我的星盘', requiresAuth: true }
+      },
+      {
+        path: 'social-icebreaker',
+        name: 'SocialIcebreaker',
+        component: () => import('@/views/SocialIcebreaker.vue'),
+        meta: { title: '社交破冰助手' }
+      },
+      {
+        path: 'group-matrix',
+        name: 'GroupMatrix',
+        component: () => import('@/views/GroupMatrix.vue'),
+        meta: { title: '多人星盘关系矩阵' }
+      },
+      {
+        path: 'life-script',
+        name: 'LifeScript',
+        component: () => import('@/views/LifeScript.vue'),
+        meta: { title: '人生剧本时空穿梭机' }
+      },
+      {
+        path: 'workbench',
+        name: 'AstrologerWorkbench',
+        component: () => import('@/views/AstrologerWorkbench.vue'),
+        meta: { title: '占星师 AI 助手工作台' }
+      },
+      {
+        path: 'energy-community',
+        name: 'EnergyWeather',
+        component: () => import('@/views/EnergyWeather.vue'),
+        meta: { title: '能量天气共同体' }
+      },
+      {
+        path: 'energy-community/missions',
+        name: 'EnergyMissions',
+        component: () => import('@/views/EnergyMissions.vue'),
+        meta: { title: '能量任务中心' }
+      },
+      {
+        path: 'energy-community/contribute',
+        name: 'EnergyContribute',
+        component: () => import('@/views/EnergyContribute.vue'),
+        meta: { title: '能量注入中心' }
+      },
+      {
+        path: 'energy-community/predictions',
+        name: 'EnergyPredictions',
+        component: () => import('@/views/EnergyPredictions.vue'),
+        meta: { title: '预测竞技场' }
       }
     ]
   },

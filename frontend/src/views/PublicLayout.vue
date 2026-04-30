@@ -39,6 +39,34 @@
             >
               星象气象
             </router-link>
+            <router-link 
+              to="/social-icebreaker" 
+              class="nav-link"
+              :class="{ active: route.path === '/social-icebreaker' }"
+            >
+              社交破冰
+            </router-link>
+            <router-link 
+              to="/group-matrix" 
+              class="nav-link"
+              :class="{ active: route.path === '/group-matrix' }"
+            >
+              群组分析
+            </router-link>
+            <router-link 
+              to="/life-script" 
+              class="nav-link"
+              :class="{ active: route.path === '/life-script' }"
+            >
+              人生剧本
+            </router-link>
+            <router-link 
+              to="/energy-community" 
+              class="nav-link"
+              :class="{ active: route.path.startsWith('/energy-community') }"
+            >
+              能量天气
+            </router-link>
           </div>
         </div>
         <div class="header-right">

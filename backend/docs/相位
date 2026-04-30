@@ -1,0 +1,72 @@
+这段代码写得**相当成熟且具有实战价值**。它不仅仅是在做简单的数据堆砌，而是触及了占星排盘逻辑中最难的部分——**矛盾整合（Synthesis）**。
+
+在占星算法中，新手往往只会罗列“太阳狮子、月亮天蝎”，而你的代码尝试解决“狮子座的显摆”和“天蝎座的隐藏”如何共存的问题。
+
+以下是针对这段代码的深度评价及优化建议：
+
+### 🌟 亮点评价
+
+1.  **解耦与整合逻辑清晰**：
+    你采用了“检测（Detect） -> 解决（Resolve） -> 封装（Generate）”的流水线。特别是 `resolve_conflicts_in_tags` 函数，通过 `processed_sources` 来剔除冲突源标签，用“整合后的标签”替换“原始标签”，有效避免了输出内容自相矛盾。
+2.  **防御性编程意识强**：
+    代码中大量使用了 `.get()` 默认值处理，并对 `total_elements` 等分母进行了非零检查，这在处理不规范的 `chart_data` 时非常关键。
+3.  **人性化的结果输出**：
+    `_generate_resolution_summary` 能够把复杂的后台计算转化为一句“人话”，这对前端展示或最终用户报告非常友好。
+
+---
+
+### 🛠 待改进与优化点
+
+#### 1. 星座冲突检测过于依赖“存在性”
+在 `detect_sign_conflicts` 中，你只要 `s1` 和 `s2` 同时存在（present）就判定冲突：
+* **问题**：如果太阳在狮子，冥王星在水瓶，这两个星座虽然对冲，但因为冥王星是远地行星，这种“冲突”在性格层面往往不明显。
+* **建议**：给行星引入**权重（Weight）**。太阳、月亮、上升点的冲突权重应远高于三王星。
+
+#### 2. `processed_sources` 的匹配逻辑较脆弱
+```python
+if processed in tag_source:
+    should_keep = False
+```
+* **问题**：这是一种模糊匹配。如果 `processed` 是 "火星"，而 `tag_source` 是 "火象星座分布"，可能会误伤。
+* **建议**：建立更规范的 ID 系统。例如 `source_id: "planet_mars"`，而不是直接用字符串匹配。
+
+#### 3. 元素冲突（火水/风土）的硬编码
+在 `detect_element_quality_conflicts` 中：
+* **问题**：你设定了 `>= 3` 这个硬性阈值。如果一个人只有 2 个火、2 个水，但它们分别是日和月，这种冲突感其实比 3 个外行星在火/水要强得多。
+* **建议**：计算**加权分数**（Weighted Score），例如：
+    $TotalScore = \sum (PlanetWeight \times ElementCount)$
+
+#### 4. `SIGN_CONFLICT_PATTERNS` 的外部依赖
+代码中引用了 `SIGN_CONFLICT_PATTERNS`，虽然没贴出来，但这个配置表的质量决定了程序的深度。
+* **建议**：确保这个配置表不仅包含“对冲（180度）”，还要包含“刑克（90度）”，因为刑克带来的内在挣扎通常比对冲更难调和。
+
+---
+
+### 💡 代码微调建议
+
+如果你希望更优雅一点，可以尝试：
+
+```python
+# 优化：引入权重系统
+PLANET_WEIGHTS = {
+    "太阳": 10, "月亮": 10, "上升": 12, 
+    "水星": 5, "金星": 5, "火星": 5,
+    # 三王星权重设低
+}
+
+# 优化：冲突描述的丰富性
+def _generate_resolution_summary(conflicts: List[Dict[str, Any]]) -> str:
+    if not conflicts:
+        return "内在能量流动顺畅，性格特质较为纯粹。"
+    
+    # 使用 set 去重，防止多个相位指向同一个 resolution 导致重复
+    resolutions = list(dict.fromkeys([c.get("resolution", "") for c in conflicts if c.get("resolution")]))
+    
+    # 增加更感性的连接词
+    if len(resolutions) >= 4:
+        return f"你的性格极其复杂多面，正在经历深度的内在整合，核心表现为：{'/'.join(resolutions[:3])}等。"
+    # ... 
+```
+
+### 总结
+**这是一份商用级别的逻辑底稿。** 它解决了占星 AI 最容易犯的“复读机”毛病（即机械重复星座特质）。只要不断丰富 `SIGN_CONFLICT_PATTERNS` 里的对冲话术（Resolution），这个系统生成的性格画像会非常具有“高级感”和“宿命感”。

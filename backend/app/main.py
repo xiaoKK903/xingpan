@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import users, conversations, messages, chat, astro, geo, charts, reports, synastry, ai_interpretation, daily_horoscope, synastry_analysis, transit
+from app.routers import users, conversations, messages, chat, astro, geo, charts, reports, synastry, ai_interpretation, daily_horoscope, synastry_analysis, transit, social_icebreaker, group_matrix, life_script, workbench, energy_community
 
 app = FastAPI(
     title="AI智能客服系统",
@@ -29,6 +29,11 @@ app.include_router(ai_interpretation.router, prefix="/api/ai", tags=["AI解读"]
 app.include_router(daily_horoscope.router, prefix="/api/horoscope", tags=["每日运势"])
 app.include_router(synastry_analysis.router, prefix="/api/synastry-analysis", tags=["合盘深度分析"])
 app.include_router(transit.router, prefix="/api/transit", tags=["行运气象站"])
+app.include_router(social_icebreaker.router, prefix="/api/social-icebreaker", tags=["社交破冰助手"])
+app.include_router(group_matrix.router, prefix="/api/group-matrix", tags=["多人星盘关系矩阵"])
+app.include_router(life_script.router, prefix="/api/life-script", tags=["人生剧本时空穿梭机"])
+app.include_router(workbench.router, prefix="/api/workbench", tags=["占星师工作台"])
+app.include_router(energy_community.router, prefix="/api/energy-community", tags=["能量天气共同体"])
 
 
 @app.get("/")

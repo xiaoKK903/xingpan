@@ -346,4 +346,159 @@ export const transitApi = {
   }
 }
 
+export const groupMatrixApi = {
+  calculate(data) {
+    return request.post('/group-matrix/calculate', data)
+  },
+  simulateScenario(matrixData, scenarioType) {
+    return request.post('/group-matrix/simulate-scenario', matrixData, {
+      params: { scenario_type: scenarioType }
+    })
+  },
+  getScenarioTypes() {
+    return request.get('/group-matrix/scenario-types')
+  },
+  getRoleTypes() {
+    return request.get('/group-matrix/role-types')
+  }
+}
+
+export const lifeScriptApi = {
+  analyzeYear(data) {
+    return request.post('/life-script/analyze', data)
+  },
+  generateScript(data) {
+    return request.post('/life-script/generate-script', data, {
+      timeout: 180000
+    })
+  },
+  analyzeRange(data) {
+    return request.post('/life-script/analyze-range', data)
+  },
+  getKeyYears(data) {
+    return request.post('/life-script/key-years', data)
+  },
+  getPersonalAnalysis(targetYear) {
+    return request.get('/life-script/personal/analyze', {
+      params: { target_year: targetYear }
+    })
+  },
+  getPersonalScript(targetYear) {
+    return request.get('/life-script/personal/generate-script', {
+      params: { target_year: targetYear },
+      timeout: 180000
+    })
+  }
+}
+
+export const workbenchApi = {
+  calculateChart(data) {
+    return request.post('/workbench/calculate', data)
+  },
+  
+  adjustPlanet(data) {
+    return request.post('/workbench/adjust-planet', data)
+  },
+  
+  probePlanet(data) {
+    return request.post('/workbench/probe-planet', data)
+  },
+  
+  generateNotes(data) {
+    return request.post('/workbench/generate-notes', data)
+  },
+  
+  getClassicalRules() {
+    return request.get('/workbench/classical-rules')
+  },
+  
+  getPlanetsInfo() {
+    return request.get('/workbench/planets-info')
+  }
+}
+
+export const energyCommunityApi = {
+  getCurrentWeather(scope = 'global', city = null) {
+    const params = { scope }
+    if (city) params.city = city
+    return request.get('/energy-community/weather/current', { params })
+  },
+  
+  getWeatherHistory(scope = 'global', city = null, hours = 24) {
+    const params = { scope, hours }
+    if (city) params.city = city
+    return request.get('/energy-community/weather/history', { params })
+  },
+  
+  getWeatherForecast(scope = 'global', city = null, hours = 6) {
+    const params = { scope, hours }
+    if (city) params.city = city
+    return request.get('/energy-community/weather/forecast', { params })
+  },
+  
+  updatePresence(data) {
+    return request.post('/energy-community/presence/update', data)
+  },
+  
+  getOnlineUsers(scope = 'global', city = null) {
+    const params = { scope }
+    if (city) params.city = city
+    return request.get('/energy-community/community/online', { params })
+  },
+  
+  getActiveMissions(limit = 10) {
+    return request.get('/energy-community/missions/active', { params: { limit } })
+  },
+  
+  getUpcomingMissions(hours = 24, limit = 5) {
+    return request.get('/energy-community/missions/upcoming', { params: { hours, limit } })
+  },
+  
+  getMissionDetail(missionId) {
+    return request.get(`/energy-community/missions/${missionId}`)
+  },
+  
+  joinMission(missionId) {
+    return request.post(`/energy-community/missions/${missionId}/join`)
+  },
+  
+  getAvailableContributions() {
+    return request.get('/energy-community/contributions/available')
+  },
+  
+  makeContribution(data) {
+    return request.post('/energy-community/contributions', data)
+  },
+  
+  getMyContributions(onlyActive = false, limit = 20) {
+    return request.get('/energy-community/contributions/my', { 
+      params: { only_active: onlyActive, limit } 
+    })
+  },
+  
+  getActiveContributions(scope = 'global', city = null) {
+    const params = { scope }
+    if (city) params.city = city
+    return request.get('/energy-community/contributions/active', { params })
+  },
+  
+  getOpenPredictions(targetDate = null) {
+    const params = {}
+    if (targetDate) params.target_date = targetDate
+    return request.get('/energy-community/predictions/open', { params })
+  },
+  
+  getPredictionDetail(predictionId) {
+    return request.get(`/energy-community/predictions/${predictionId}`)
+  },
+  
+  castVote(data) {
+    return request.post('/energy-community/predictions/vote', data)
+  },
+  
+  getMyPredictionsHistory(limit = 20) {
+    return request.get('/energy-community/predictions/history/my', { params: { limit } })
+  }
+}
+
 export default request
