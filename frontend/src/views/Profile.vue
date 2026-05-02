@@ -21,6 +21,23 @@
               <div class="stat-label">消息数</div>
             </div>
           </div>
+          
+          <el-divider />
+          
+          <div class="feature-entrances">
+            <div class="quest-entrance network-chain-entrance">
+              <div class="entrance-content" @click="goToNetworkChain">
+                <div class="entrance-icon">🌐</div>
+                <div class="entrance-info">
+                  <h5>星盘人脉链</h5>
+                  <p>发现与你能量共鸣的人脉</p>
+                </div>
+                <div class="entrance-arrow">
+                  <span class="arrow">→</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </el-card>
       </el-col>
       
@@ -98,11 +115,15 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { conversationApi, messageApi } from '@/api'
 
 const userStore = useUserStore()
+const router = useRouter()
+
+const isLoggedIn = computed(() => userStore.isLoggedIn || !!localStorage.getItem('token'))
 
 const profileFormRef = ref(null)
 const passwordFormRef = ref(null)
@@ -205,6 +226,15 @@ const updatePassword = async () => {
   }
 }
 
+function goToNetworkChain() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再查看星盘人脉链')
+    router.push({ path: '/login', query: { redirect: '/network-chain' } })
+    return
+  }
+  router.push('/network-chain')
+}
+
 onMounted(() => {
   profileForm.email = userStore.email || ''
   loadStats()
@@ -273,6 +303,72 @@ onMounted(() => {
           margin-top: 4px;
         }
       }
+    }
+    
+    .feature-entrances {
+      margin-top: 8px;
+    }
+    
+    .quest-entrance {
+      margin-top: 8px;
+    }
+    
+    .entrance-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%);
+      border-radius: 10px;
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .entrance-content:hover {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(16, 185, 129, 0.2) 100%);
+      transform: translateY(-1px);
+    }
+    
+    .entrance-icon {
+      font-size: 1.5rem;
+    }
+    
+    .entrance-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    
+    .entrance-info h5 {
+      margin: 0;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+    }
+    
+    .entrance-info p {
+      margin: 0;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .entrance-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .arrow {
+      font-size: 0.9rem;
+      color: #22c55e;
+      transition: transform 0.3s ease;
+    }
+    
+    .entrance-content:hover .arrow {
+      transform: translateX(2px);
     }
   }
   

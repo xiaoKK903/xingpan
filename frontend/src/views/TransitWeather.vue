@@ -20,6 +20,19 @@
     </div>
 
     <div class="transit-main">
+      <div class="resonance-entrance" @click="goToResonance">
+        <div class="entrance-left">
+          <div class="entrance-icon">🌌</div>
+          <div class="entrance-info">
+            <h3 class="entrance-title">星能共鸣池</h3>
+            <p class="entrance-desc">用星元碎片炼化能量，注入全服星云，解锁预言券奖励</p>
+          </div>
+        </div>
+        <div class="entrance-right">
+          <span class="entrance-arrow">→</span>
+        </div>
+      </div>
+
       <div class="transit-header">
         <div class="header-icon">
           <el-icon size="36"><Sunrise /></el-icon>
@@ -411,6 +424,10 @@ async function retryInterpretation() {
   await loadInterpretation()
 }
 
+function goToResonance() {
+  router.push('/star-resonance')
+}
+
 onMounted(async () => {
   if (isLoggedIn.value) {
     await loadMyCharts()
@@ -426,6 +443,80 @@ onMounted(async () => {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.resonance-entrance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.15) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.25) 100%);
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.25);
+  }
+  
+  .entrance-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .entrance-icon {
+    font-size: 36px;
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+  
+  .entrance-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .entrance-title {
+    font-size: 16px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+  }
+  
+  .entrance-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+  }
+  
+  .entrance-right {
+    display: flex;
+    align-items: center;
+  }
+  
+  .entrance-arrow {
+    font-size: 24px;
+    color: rgba(139, 92, 246, 0.6);
+    transition: transform 0.3s ease;
+  }
+  
+  &:hover .entrance-arrow {
+    transform: translateX(4px);
+    color: rgba(139, 92, 246, 0.9);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 .stars-bg {

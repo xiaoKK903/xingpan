@@ -40,33 +40,79 @@
               星象气象
             </router-link>
             <router-link 
-              to="/social-icebreaker" 
+              to="/star-resonance" 
               class="nav-link"
-              :class="{ active: route.path === '/social-icebreaker' }"
+              :class="{ active: route.path === '/star-resonance' }"
             >
-              社交破冰
+              星能共鸣
             </router-link>
             <router-link 
-              to="/group-matrix" 
+              to="/plaza" 
               class="nav-link"
-              :class="{ active: route.path === '/group-matrix' }"
+              :class="{ active: route.path === '/plaza' }"
             >
-              群组分析
+              平行人生
             </router-link>
             <router-link 
-              to="/life-script" 
+              to="/boss-hall" 
               class="nav-link"
-              :class="{ active: route.path === '/life-script' }"
+              :class="{ active: route.path === '/boss-hall' }"
             >
-              人生剧本
+              副本大厅
             </router-link>
             <router-link 
-              to="/energy-community" 
+              to="/element-quest" 
               class="nav-link"
-              :class="{ active: route.path.startsWith('/energy-community') }"
+              :class="{ active: route.path === '/element-quest' }"
             >
-              能量天气
+              星图盲盒
             </router-link>
+            
+            <el-dropdown trigger="click" class="more-dropdown">
+              <span class="nav-link more-link">
+                更多
+                <el-icon class="arrow-icon"><ArrowDown /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu class="custom-dropdown-menu">
+                  <router-link to="/social-icebreaker" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>社交破冰</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/group-matrix" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>群组分析</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/life-script" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>人生剧本</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/workbench" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>占星师工作台</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <el-dropdown-item divided>
+                    <router-link to="/gift-shop" style="text-decoration: none; color: inherit;">
+                      <span>🎁 礼物商城</span>
+                    </router-link>
+                  </el-dropdown-item>
+                  <el-dropdown-item>
+                    <router-link to="/report-shop" style="text-decoration: none; color: inherit;">
+                      <span>📄 星盘报告</span>
+                    </router-link>
+                  </el-dropdown-item>
+                  <el-dropdown-item>
+                    <router-link to="/vip-center" style="text-decoration: none; color: inherit;">
+                      <span>⭐ 星钻会员</span>
+                    </router-link>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
         <div class="header-right">
@@ -75,6 +121,17 @@
             <button class="nav-btn nav-btn-primary" @click="goToRegister">注册</button>
           </template>
           <template v-else-if="userStore.isAdmin">
+            <button 
+              class="nav-btn checkin-btn" 
+              :class="{ 'checkin-btn--pending': !hasCheckedInToday }"
+              @click="openCheckInDialog"
+            >
+              <el-icon><Calendar /></el-icon>
+              <span class="checkin-text">签到</span>
+              <span v-if="!hasCheckedInToday" class="checkin-badge">
+                <el-icon><CircleCheckFilled /></el-icon>
+              </span>
+            </button>
             <button class="nav-btn nav-btn-primary" @click="goToAdmin">
               <el-icon><User /></el-icon>
               管理后台
@@ -91,12 +148,26 @@
                 <el-dropdown-menu class="custom-dropdown-menu">
                   <el-dropdown-item command="admin">后台管理</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="vip">⭐ 星钻会员</el-dropdown-item>
+                  <el-dropdown-item command="gifts">🎁 礼物商城</el-dropdown-item>
+                  <el-dropdown-item command="reports">📄 星盘报告</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
           </template>
           <template v-else>
+            <button 
+              class="nav-btn checkin-btn" 
+              :class="{ 'checkin-btn--pending': !hasCheckedInToday }"
+              @click="openCheckInDialog"
+            >
+              <el-icon><Calendar /></el-icon>
+              <span class="checkin-text">签到</span>
+              <span v-if="!hasCheckedInToday" class="checkin-badge">
+                <el-icon><CircleCheckFilled /></el-icon>
+              </span>
+            </button>
             <button class="nav-btn nav-btn-link" @click="goToMyCharts">
               <el-icon><Star /></el-icon>
               我的星盘
@@ -117,6 +188,9 @@
                 <el-dropdown-menu class="custom-dropdown-menu">
                   <el-dropdown-item command="charts">我的星盘</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="vip">⭐ 星钻会员</el-dropdown-item>
+                  <el-dropdown-item command="gifts">🎁 礼物商城</el-dropdown-item>
+                  <el-dropdown-item command="reports">📄 星盘报告</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -128,19 +202,54 @@
     <el-main class="public-main">
       <router-view />
     </el-main>
+    
+    <CheckInDialog 
+      v-model="showCheckInDialog"
+      @checked-in="onCheckInSuccess"
+      ref="checkInDialogRef"
+    />
   </div>
 </template>
 
 <script setup>
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
+import { ArrowDown, Calendar, CircleCheckFilled, Star, User, UserFilled } from '@element-plus/icons-vue'
+import { checkinApi } from '@/api'
+import CheckInDialog from '@/components/CheckInDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
+const showCheckInDialog = ref(false)
+const hasCheckedInToday = ref(true)
+const checkInDialogRef = ref(null)
+
 const showAuthButtons = computed(() => !route.meta.hideAuth)
+
+async function loadCheckInStatus() {
+  if (!userStore.isLoggedIn && !localStorage.getItem('token')) {
+    return
+  }
+  
+  try {
+    const status = await checkinApi.getStatus()
+    hasCheckedInToday.value = status.has_checked_in_today
+  } catch (error) {
+    console.error('加载签到状态失败:', error)
+  }
+}
+
+function openCheckInDialog() {
+  showCheckInDialog.value = true
+}
+
+function onCheckInSuccess(result) {
+  hasCheckedInToday.value = true
+  userStore.fetchVipStatus()
+}
 
 function goToLogin() {
   router.push('/login')
@@ -173,11 +282,35 @@ function handleCommand(command) {
     case 'profile':
       router.push('/profile')
       break
+    case 'vip':
+      router.push('/vip-center')
+      break
+    case 'gifts':
+      router.push('/gift-shop')
+      break
+    case 'reports':
+      router.push('/report-shop')
+      break
     case 'logout':
       userStore.logout()
       break
   }
 }
+
+watch(
+  () => userStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      loadCheckInStatus()
+    }
+  }
+)
+
+onMounted(() => {
+  if (userStore.isLoggedIn || localStorage.getItem('token')) {
+    loadCheckInStatus()
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -371,6 +504,38 @@ function handleCommand(command) {
   }
 }
 
+.more-dropdown {
+  .more-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    
+    .arrow-icon {
+      font-size: 12px;
+      transition: transform 0.3s ease;
+    }
+  }
+  
+  &:hover .more-link .arrow-icon {
+    transform: rotate(180deg);
+  }
+}
+
+.dropdown-nav-link {
+  text-decoration: none;
+  color: inherit;
+  
+  :deep(.el-dropdown-menu__item) {
+    padding: 0;
+    
+    span {
+      display: block;
+      padding: 10px 20px;
+    }
+  }
+}
+
 .public-main {
   flex: 1;
   padding: 0;
@@ -380,5 +545,70 @@ function handleCommand(command) {
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
+}
+
+.checkin-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  
+  .checkin-text {
+    margin-right: 4px;
+  }
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c4b5fd;
+  }
+  
+  &.checkin-btn--pending {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+    animation: pulse-checkin 2s ease-in-out infinite;
+    
+    .checkin-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 16px;
+      height: 16px;
+      background: #10b981;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: badge-pulse 1.5s ease-in-out infinite;
+      
+      :deep(svg) {
+        width: 12px;
+        height: 12px;
+        color: #fff;
+      }
+    }
+    
+    &:hover {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(245, 158, 11, 0.2) 100%);
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+    }
+  }
+}
+
+@keyframes pulse-checkin {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
 }
 </style>

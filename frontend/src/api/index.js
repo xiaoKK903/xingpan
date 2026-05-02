@@ -417,87 +417,590 @@ export const workbenchApi = {
   }
 }
 
-export const energyCommunityApi = {
-  getCurrentWeather(scope = 'global', city = null) {
-    const params = { scope }
-    if (city) params.city = city
-    return request.get('/energy-community/weather/current', { params })
+export const plazaApi = {
+  getStyles() {
+    return request.get('/plaza/styles')
   },
   
-  getWeatherHistory(scope = 'global', city = null, hours = 24) {
-    const params = { scope, hours }
-    if (city) params.city = city
-    return request.get('/energy-community/weather/history', { params })
+  analyzeConflict(data) {
+    return request.post('/plaza/analyze-conflict', data)
   },
   
-  getWeatherForecast(scope = 'global', city = null, hours = 6) {
-    const params = { scope, hours }
-    if (city) params.city = city
-    return request.get('/energy-community/weather/forecast', { params })
+  encounter(data) {
+    return request.post('/plaza/encounter', data)
   },
   
-  updatePresence(data) {
-    return request.post('/energy-community/presence/update', data)
+  testEncounter() {
+    return request.post('/plaza/test-encounter')
   },
   
-  getOnlineUsers(scope = 'global', city = null) {
-    const params = { scope }
-    if (city) params.city = city
-    return request.get('/energy-community/community/online', { params })
+  getWeatherPanel() {
+    return request.get('/plaza/weather-panel')
   },
   
-  getActiveMissions(limit = 10) {
-    return request.get('/energy-community/missions/active', { params: { limit } })
+  getPlazaMissions() {
+    return request.get('/plaza/plaza-missions')
   },
   
-  getUpcomingMissions(hours = 24, limit = 5) {
-    return request.get('/energy-community/missions/upcoming', { params: { hours, limit } })
-  },
-  
-  getMissionDetail(missionId) {
-    return request.get(`/energy-community/missions/${missionId}`)
-  },
-  
-  joinMission(missionId) {
-    return request.post(`/energy-community/missions/${missionId}/join`)
-  },
-  
-  getAvailableContributions() {
-    return request.get('/energy-community/contributions/available')
-  },
-  
-  makeContribution(data) {
-    return request.post('/energy-community/contributions', data)
-  },
-  
-  getMyContributions(onlyActive = false, limit = 20) {
-    return request.get('/energy-community/contributions/my', { 
-      params: { only_active: onlyActive, limit } 
+  simulateOminous(eventKey, durationMinutes = 30) {
+    return request.post('/plaza/simulate-ominous', {
+      event_key: eventKey,
+      duration_minutes: durationMinutes
     })
   },
   
-  getActiveContributions(scope = 'global', city = null) {
-    const params = { scope }
-    if (city) params.city = city
-    return request.get('/energy-community/contributions/active', { params })
+  clearSimulatedOminous() {
+    return request.post('/plaza/clear-simulated-ominous')
   },
   
-  getOpenPredictions(targetDate = null) {
+  getSimulatedStatus() {
+    return request.get('/plaza/simulated-status')
+  },
+  
+  getWeatherHistory(hours = 12) {
+    return request.get('/plaza/weather-history', { params: { hours } })
+  },
+  
+  getOminousInfo() {
+    return request.get('/plaza/ominous-info')
+  }
+}
+
+export const energyWeatherApi = {
+  getCurrentWeather() {
+    return request.get('/energy-weather/current')
+  },
+  
+  getWeatherHistory(hours = 12) {
+    return request.get('/energy-weather/history', { params: { hours } })
+  },
+  
+  getMissions() {
+    return request.get('/energy-weather/missions')
+  },
+  
+  completeMission(missionInstanceId, completedActions = null, proofText = null) {
+    return request.post('/energy-weather/missions/complete', {
+      mission_instance_id: missionInstanceId,
+      completed_actions: completedActions,
+      proof_text: proofText
+    })
+  },
+  
+  getContributionTypes() {
+    return request.get('/energy-weather/contribution-types')
+  },
+  
+  contributeEnergy(contributionType) {
+    return request.post('/energy-weather/contribute', {
+      contribution_type: contributionType
+    })
+  },
+  
+  getMyCompletions(limit = 20) {
+    return request.get('/energy-weather/my-completions', { params: { limit } })
+  },
+  
+  getMissionCompletions(params = {}) {
+    const limit = params.limit || 20
+    return request.get('/energy-weather/my-completions', { params: { limit } })
+  },
+  
+  getMyTransactions(currencyType = null, limit = 20) {
+    const params = { limit }
+    if (currencyType) params.currency_type = currencyType
+    return request.get('/energy-weather/my-transactions', { params })
+  },
+  
+  getTransactionHistory(params = {}) {
+    const limit = params.limit || 20
+    return request.get('/energy-weather/my-transactions', { params: { limit } })
+  },
+  
+  getOminousEvents() {
+    return request.get('/energy-weather/ominous-events')
+  },
+  
+  getMissionTemplates(moodType = null) {
     const params = {}
-    if (targetDate) params.target_date = targetDate
-    return request.get('/energy-community/predictions/open', { params })
+    if (moodType) params.mood_type = moodType
+    return request.get('/energy-weather/mission-templates', { params })
   },
   
-  getPredictionDetail(predictionId) {
-    return request.get(`/energy-community/predictions/${predictionId}`)
+  getWeatherLevels() {
+    return request.get('/energy-weather/weather-levels')
   },
   
-  castVote(data) {
-    return request.post('/energy-community/predictions/vote', data)
+  refreshWeather() {
+    return request.post('/energy-weather/refresh')
+  }
+}
+
+export const starResonanceApi = {
+  getPoolStatus() {
+    return request.get('/star-resonance/status')
   },
   
-  getMyPredictionsHistory(limit = 20) {
-    return request.get('/energy-community/predictions/history/my', { params: { limit } })
+  getMyStrongPlanets() {
+    return request.get('/star-resonance/my-strong-planets')
+  },
+  
+  refinePreview(params) {
+    return request.post('/star-resonance/refine', params)
+  },
+  
+  contribute(params) {
+    return request.post('/star-resonance/contribute', params)
+  },
+  
+  getMyTickets(onlyValid = true, limit = 20) {
+    return request.get('/star-resonance/my-tickets', { 
+      params: { only_valid: onlyValid, limit } 
+    })
+  },
+  
+  getRecentContributions(limit = 20) {
+    return request.get('/star-resonance/recent-contributions', { 
+      params: { limit } 
+    })
+  },
+  
+  getElementInfo() {
+    return request.get('/star-resonance/element-info')
+  }
+}
+
+export const bossBattleApi = {
+  getHall() {
+    return request.get('/boss-battle/hall')
+  },
+  
+  getActiveBosses() {
+    return request.get('/boss-battle/bosses')
+  },
+  
+  getBossDetail(bossId) {
+    return request.get(`/boss-battle/bosses/${bossId}`)
+  },
+  
+  createTeam(data) {
+    return request.post('/boss-battle/teams/create', data)
+  },
+  
+  inviteFromEncounter(data) {
+    return request.post('/boss-battle/teams/invite-from-encounter', data)
+  },
+  
+  addTeamMember(data) {
+    return request.post('/boss-battle/teams/add-member', data)
+  },
+  
+  removeTeamMember(teamId, memberId) {
+    return request.delete(`/boss-battle/teams/${teamId}/members/${memberId}`)
+  },
+  
+  getTeamDetail(teamId) {
+    return request.get(`/boss-battle/teams/${teamId}`)
+  },
+  
+  leaveTeam(memberId) {
+    return request.post(`/boss-battle/teams/leave?member_id=${memberId}`)
+  },
+  
+  getMemberCurrentTeam(memberId) {
+    return request.get(`/boss-battle/teams/member/${memberId}/current`)
+  },
+  
+  getTeamsByBoss(bossId) {
+    return request.get(`/boss-battle/teams/by-boss/${bossId}`)
+  },
+  
+  startBattle(data) {
+    return request.post('/boss-battle/battle/start', data)
+  },
+  
+  getBattleResult(battleId) {
+    return request.get(`/boss-battle/battle/result/${battleId}`)
+  },
+  
+  autoMatch(bossId, element = null) {
+    const params = {}
+    if (element) params.element = element
+    return request.get(`/boss-battle/match/auto-match/${bossId}`, { params })
+  }
+}
+
+export const predictionApi = {
+  getThemes() {
+    return request.get('/prediction/themes')
+  },
+  
+  getUpcoming(includeAnnounced = true) {
+    return request.get('/prediction/upcoming', { 
+      params: { include_announced: includeAnnounced } 
+    })
+  },
+  
+  getOpen() {
+    return request.get('/prediction/open')
+  },
+  
+  getDetail(predictionId) {
+    return request.get(`/prediction/detail-optimized/${predictionId}`)
+  },
+  
+  validateVote(predictionId, useAsset = 'fragment') {
+    return request.get('/prediction/validate-vote', { 
+      params: { prediction_id: predictionId, use_asset: useAsset } 
+    })
+  },
+  
+  castVoteSecure(data) {
+    return request.post('/prediction/vote-secure', data)
+  },
+  
+  claimReward(voteId) {
+    return request.post('/prediction/claim-reward', null, {
+      params: { vote_id: voteId }
+    })
+  },
+  
+  checkRateLimit(actionType = 'vote') {
+    return request.get('/prediction/check-rate-limit', {
+      params: { action_type: actionType }
+    })
+  },
+  
+  getTieredCosts(predictionId) {
+    return request.get(`/prediction/tiered-costs/${predictionId}`)
+  },
+  
+  getMyHistory(limit = 20) {
+    return request.get('/prediction/my-history', { 
+      params: { limit } 
+    })
+  },
+  
+  getMyTags(categories = null) {
+    const params = {}
+    if (categories) params.categories = categories
+    return request.get('/prediction/my-tags', { params })
+  }
+}
+
+export const elementQuestApi = {
+  getMyProfile() {
+    return request.get('/element-quest/profile/me')
+  },
+  
+  analyzeElements() {
+    return request.post('/element-quest/analyze')
+  },
+  
+  analyzeElementsTemporary(chartData) {
+    return request.post('/element-quest/analyze-temporary', chartData)
+  },
+  
+  getMyTags() {
+    return request.get('/element-quest/tags/me')
+  },
+  
+  getQuestStatus() {
+    return request.get('/element-quest/quest/status')
+  },
+  
+  createBlindBox() {
+    return request.post('/element-quest/quest/blind-box')
+  },
+  
+  getMyBlindBoxes(status = null) {
+    const params = {}
+    if (status) params.status = status
+    return request.get('/element-quest/quest/blind-boxes', { params })
+  },
+  
+  getBlindBoxDetail(boxId) {
+    return request.get(`/element-quest/quest/blind-box/${boxId}`)
+  },
+  
+  revealBlindBox(boxId) {
+    return request.post(`/element-quest/quest/blind-box/${boxId}/reveal`)
+  },
+  
+  claimBlindBoxReward(boxId) {
+    return request.post(`/element-quest/quest/blind-box/${boxId}/claim`)
+  },
+  
+  refreshQuestCount() {
+    return request.post('/element-quest/quest/refresh')
+  },
+  
+  getQuestHistory(limit = 20) {
+    return request.get('/element-quest/quest/history', { params: { limit } })
+  }
+}
+
+export const phaseConnectApi = {
+  getMyStatus() {
+    return request.get('/phase-connect/my-status')
+  },
+  
+  searchMatches(data) {
+    return request.post('/phase-connect/search-matches', data)
+  },
+  
+  startConnection(data) {
+    return request.post('/phase-connect/start-connection', data)
+  },
+  
+  getRecentConnections() {
+    return request.get('/phase-connect/recent-connections')
+  }
+}
+
+export const networkChainApi = {
+  getMyProfile() {
+    return request.get('/network-chain/my-profile')
+  },
+  
+  getRecommendations(type = 'emotional') {
+    return request.get('/network-chain/recommendations', { params: { type } })
+  },
+  
+  getDetail(data) {
+    return request.post('/network-chain/get-detail', data)
+  },
+  
+  getNetworkGraph() {
+    return request.get('/network-chain/network-graph')
+  },
+  
+  addToNetwork(userId) {
+    return request.post('/network-chain/add-to-network', { target_user_id: userId })
+  }
+}
+
+export const synastryEnhancedApi = {
+  generateAiCopy(data) {
+    return request.post('/synastry-enhanced/generate-ai-copy', data)
+  },
+  
+  generatePhotocard(data) {
+    return request.post('/synastry-enhanced/generate-photocard', data)
+  },
+  
+  getEnhancedAnalysis(data) {
+    return request.post('/synastry-enhanced/enhanced-analysis', data)
+  }
+}
+
+export const privateChatApi = {
+  startChat(data) {
+    return request.post('/private-chat/start', data)
+  },
+  
+  sendMessage(data) {
+    return request.post('/private-chat/send', data)
+  },
+  
+  getChatList(skip = 0, limit = 20) {
+    return request.get('/private-chat/list', { params: { skip, limit } })
+  },
+  
+  getMessages(chatId, beforeId = null, limit = 50, markAsRead = true) {
+    const params = { limit, mark_as_read: markAsRead }
+    if (beforeId) params.before_id = beforeId
+    return request.get(`/private-chat/${chatId}/messages`, { params })
+  },
+  
+  markAsRead(chatId) {
+    return request.post(`/private-chat/${chatId}/read`)
+  },
+  
+  getUnreadCount() {
+    return request.get('/private-chat/unread/count')
+  }
+}
+
+export const photocardApi = {
+  savePhotocard(data) {
+    return request.post('/photocard/save', data)
+  },
+  
+  getList(skip = 0, limit = 20) {
+    return request.get('/photocard/list', { params: { skip, limit } })
+  },
+  
+  getDetail(photocardId, includeSvg = false) {
+    return request.get(`/photocard/${photocardId}`, { params: { include_svg: includeSvg } })
+  },
+  
+  sharePhotocard(photocardId) {
+    return request.post('/photocard/share', { photocard_id: photocardId })
+  },
+  
+  getShared(shareCode) {
+    return request.get(`/photocard/share/${shareCode}`)
+  },
+  
+  deletePhotocard(photocardId) {
+    return request.delete(`/photocard/${photocardId}`)
+  }
+}
+
+export const vipApi = {
+  getPlans() {
+    return request.get('/vip/plans')
+  },
+  
+  getPrivileges() {
+    return request.get('/vip/privileges')
+  },
+  
+  getMyStatus() {
+    return request.get('/vip/status')
+  },
+  
+  subscribe(planType) {
+    return request.post('/vip/subscribe', null, { params: { plan_type: planType } })
+  },
+  
+  cancelAutoRenew() {
+    return request.post('/vip/auto-renew/cancel')
+  },
+  
+  getSubscriptions(limit = 20, offset = 0) {
+    return request.get('/vip/subscriptions', { params: { limit, offset } })
+  },
+  
+  checkPrivilege(privilegeKey) {
+    return request.get(`/vip/check-privilege/${privilegeKey}`)
+  }
+}
+
+export const giftApi = {
+  getShop() {
+    return request.get('/gifts/shop')
+  },
+  
+  sendGift(data) {
+    return request.post('/gifts/send', data)
+  },
+  
+  getReceived(limit = 50, offset = 0) {
+    return request.get('/gifts/received', { params: { limit, offset } })
+  },
+  
+  getSent(limit = 50, offset = 0) {
+    return request.get('/gifts/sent', { params: { limit, offset } })
+  },
+  
+  getDisplayed() {
+    return request.get('/gifts/displayed')
+  },
+  
+  displayGift(transactionId, isFeatured = false) {
+    return request.post(`/gifts/display/${transactionId}`, null, { params: { is_featured: isFeatured } })
+  },
+  
+  removeDisplayed(displayId) {
+    return request.delete(`/gifts/display/${displayId}`)
+  },
+  
+  setFeatured(displayId, isFeatured = true) {
+    return request.put(`/gifts/display/${displayId}/featured`, null, { params: { is_featured: isFeatured } })
+  },
+  
+  getStatistics() {
+    return request.get('/gifts/statistics')
+  },
+  
+  getUserDisplayedGifts(userId) {
+    return request.get(`/gifts/user/${userId}/displayed`)
+  }
+}
+
+export const reportShopApi = {
+  getShop() {
+    return request.get('/report-shop/shop')
+  },
+  
+  purchaseReport(data) {
+    return request.post('/report-shop/purchase', data)
+  },
+  
+  getPurchased(limit = 20, offset = 0) {
+    return request.get('/report-shop/purchased', { params: { limit, offset } })
+  },
+  
+  viewReport(purchaseId) {
+    return request.get(`/report-shop/view/${purchaseId}`)
+  },
+  
+  checkAccess(productKey, chartId = null, synastryRecordId = null, groupMatrixId = null) {
+    const params = { product_key: productKey }
+    if (chartId) params.chart_id = chartId
+    if (synastryRecordId) params.synastry_record_id = synastryRecordId
+    if (groupMatrixId) params.group_matrix_id = groupMatrixId
+    return request.get('/report-shop/check-access', { params })
+  },
+  
+  getStatistics() {
+    return request.get('/report-shop/statistics')
+  }
+}
+
+export const paymentApi = {
+  createOrder(data) {
+    return request.post('/payment/order/create', data)
+  },
+  
+  getOrder(orderNo) {
+    return request.get(`/payment/order/${orderNo}`)
+  },
+  
+  getOrders(status = null, limit = 20, offset = 0) {
+    const params = { limit, offset }
+    if (status) params.status = status
+    return request.get('/payment/orders', { params })
+  },
+  
+  cancelOrder(orderNo) {
+    return request.post(`/payment/order/${orderNo}/cancel`)
+  },
+  
+  simulatePayment(orderNo, success = true) {
+    return request.post('/payment/sandbox/simulate', { order_no: orderNo, success })
+  },
+  
+  quickPay(orderNo, success = true) {
+    return request.get('/payment/sandbox/quick-pay', { params: { order_no: orderNo, success } })
+  },
+  
+  getStatistics() {
+    return request.get('/payment/statistics')
+  }
+}
+
+export const checkinApi = {
+  getStatus() {
+    return request.get('/checkin/status')
+  },
+  
+  performCheckin() {
+    return request.post('/checkin/sign')
+  },
+  
+  getRewards() {
+    return request.get('/checkin/rewards')
+  },
+  
+  getHistory(page = 1, pageSize = 20) {
+    return request.get('/checkin/history', { params: { page, page_size: pageSize } })
+  },
+  
+  initRewards() {
+    return request.post('/checkin/init-rewards')
   }
 }
 

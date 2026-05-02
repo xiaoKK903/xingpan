@@ -10,7 +10,8 @@ DASHSCOPE_OPENAI_COMPATIBLE_URL = "https://dashscope.aliyuncs.com/compatible-mod
 DEEPSEEK_OPENAI_COMPATIBLE_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "qwen3.6-plus"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro"
-FAST_DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_FLASH_MODEL = "deepseek-v4-flash"
+FAST_DEEPSEEK_MODEL = DEEPSEEK_FLASH_MODEL
 DEFAULT_QWEN_FAST_MODEL = "qwen-plus"
 
 SYSTEM_PROMPT = """你是一位专业的占星师，拥有深厚的占星学知识和丰富的解读经验。请根据用户提供的星盘配置，用中文进行专业、深入且易于理解的解读。
@@ -468,15 +469,13 @@ async def call_deepseek_api(
     
     if use_reasoning and reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
-        payload["extra_body"] = {
-            "thinking": {
-                "type": "enabled"
-            }
+        payload["thinking"] = {
+            "type": "enabled"
         }
     
     logger.info(f"开始调用 DeepSeek API")
     logger.info(f"请求URL: {api_url}")
-    logger.info(f"请求负载: model={use_model}, 提示词长度={len(prompt)}字符, max_tokens={max_tokens}")
+    logger.info(f"请求负载: model={use_model}, 提示词长度={len(prompt)}字符, max_tokens={max_tokens}, use_reasoning={use_reasoning}")
     
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:

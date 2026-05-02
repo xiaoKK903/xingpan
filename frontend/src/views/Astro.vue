@@ -511,6 +511,13 @@
                     >
                       相位关系
                     </button>
+                    <button 
+                      class="tab-btn"
+                      :class="{ active: activeTab === 'elements' }"
+                      @click="activeTab = 'elements'"
+                    >
+                      元素能量
+                    </button>
                   </div>
 
                   <div class="tab-content">
@@ -593,6 +600,133 @@
                         暂无主要相位
                       </div>
                     </div>
+
+                    <div v-if="activeTab === 'elements'" class="elements-tab">
+                      <div v-if="analyzingElements" class="elements-loading">
+                        <div class="loading-spinner"></div>
+                        <span>正在分析元素能量...</span>
+                      </div>
+                      
+                      <div v-else-if="elementAnalysis" class="elements-content">
+                        <div class="element-summary">
+                          <div class="summary-header">
+                            <h4>四元素能量分布</h4>
+                            <span class="total-score">总分: {{ elementAnalysis.total_score }}</span>
+                          </div>
+                        </div>
+
+                        <div class="energy-progress-bars">
+                          <div 
+                            v-for="elem in elementAnalysis.sorted_elements" 
+                            :key="elem.element"
+                            class="progress-item"
+                          >
+                            <div class="progress-header">
+                              <span class="element-symbol">{{ elem.info.symbol }}</span>
+                              <span class="element-name">{{ elem.info.name_cn }}</span>
+                              <span class="element-score">{{ elem.score }} 分</span>
+                              <span 
+                                class="element-level"
+                                :class="elem.level"
+                              >
+                                {{ elem.level_label }}
+                              </span>
+                            </div>
+                            <div class="progress-bar-container">
+                              <div 
+                                class="progress-bar"
+                                :class="elem.element"
+                                :style="{ width: elem.percentage + '%' }"
+                              ></div>
+                              <span class="progress-percent">{{ elem.percentage }}%</span>
+                            </div>
+                            <div class="progress-detail">
+                              <span v-if="elem.planets.length > 0" class="planet-info">
+                                行星: {{ elem.planets.map(p => p.name).join('、') }}
+                              </span>
+                              <span v-if="elem.aspects.length > 0" class="aspect-info">
+                                相位: {{ elem.aspects.length }} 个
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="energy-tags-section" v-if="energyTags.length > 0">
+                          <h5>能量标签</h5>
+                          <div class="energy-tags">
+                            <div 
+                              v-for="tag in energyTags" 
+                              :key="tag.key"
+                              class="energy-tag"
+                              :class="tag.category"
+                            >
+                              <span class="tag-icon">
+                                <span v-if="tag.category === 'dominant'">✨</span>
+                                <span v-else-if="tag.category === 'deficient'">💫</span>
+                                <span v-else>🌟</span>
+                              </span>
+                              <span class="tag-name">{{ tag.name }}</span>
+                              <span class="tag-desc">{{ tag.description }}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="deficiency-section" v-if="elementAnalysis.has_deficiency">
+                          <h5>能量缺角分析</h5>
+                          <div class="deficiency-info" v-if="elementAnalysis.primary_deficiency">
+                            <div class="deficiency-header">
+                              <span class="deficiency-symbol">{{ elementAnalysis.primary_deficiency.info.symbol }}</span>
+                              <span class="deficiency-name">{{ elementAnalysis.primary_deficiency.info.name_cn }}缺角</span>
+                            </div>
+                            <div class="deficiency-desc">
+                              <p><strong>短期影响:</strong> {{ elementAnalysis.primary_deficiency.descriptions.short_term }}</p>
+                              <p><strong>长期影响:</strong> {{ elementAnalysis.primary_deficiency.descriptions.long_term }}</p>
+                            </div>
+                            <div class="deficiency-suggestions">
+                              <h6>建议:</h6>
+                              <ul>
+                                <li v-for="(sug, idx) in elementAnalysis.primary_deficiency.descriptions.suggestions" :key="idx">
+                                  {{ sug }}
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="quest-entrance">
+                          <div class="entrance-content">
+                            <div class="entrance-icon">🎁</div>
+                            <div class="entrance-info">
+                              <h5>能量缺角盲盒寻宝</h5>
+                              <p>寻找能量互补的用户，开启盲盒寻宝之旅</p>
+                            </div>
+                            <button class="entrance-btn" @click="goToElementQuest">
+                              立即探索
+                              <span class="arrow">→</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div class="quest-entrance phase-connect-entrance">
+                          <div class="entrance-content">
+                            <div class="entrance-icon">🔗</div>
+                            <div class="entrance-info">
+                              <h5>相位连连看</h5>
+                              <p>探索你的相位能量，寻找与你产生奇妙化学反应的人</p>
+                            </div>
+                            <button class="entrance-btn phase-connect-btn" @click="goToPhaseConnect">
+                              开启连接
+                              <span class="arrow">→</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div v-else class="elements-empty">
+                        <div class="empty-icon">🔮</div>
+                        <p>元素能量分析中...</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -617,7 +751,7 @@
 import { reactive, ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { astroApi, geoApi, chartApi, reportApi } from '@/api'
+import { astroApi, geoApi, chartApi, reportApi, elementQuestApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import ChartWheel from '@/components/ChartWheel.vue'
 import ThreeAstroSphere from '@/components/ThreeAstroSphere.vue'
@@ -632,11 +766,14 @@ const isLoggedIn = computed(() => userStore.isLoggedIn || !!localStorage.getItem
 
 const saving = ref(false)
 const calculating = ref(false)
+const analyzingElements = ref(false)
 const exporting = ref(false)
 const showResult = ref(false)
 const activeTab = ref('planets')
 const chartData = ref(null)
 const selectedChartId = ref(null)
+const elementAnalysis = ref(null)
+const energyTags = ref([])
 
 const showExportMenu = ref(false)
 const selectedExportFormat = ref('png_hd')
@@ -1002,12 +1139,111 @@ async function calculateAstro() {
     showResult.value = true
     ElMessage.success('星盘计算完成')
     
+    analyzeElementEnergies()
+    
   } catch (error) {
     console.error('计算失败:', error)
     ElMessage.error(error.message || '星盘计算失败')
   } finally {
     calculating.value = false
   }
+}
+
+async function analyzeElementEnergies() {
+  if (!chartData.value) return
+  
+  analyzingElements.value = true
+  
+  try {
+    const result = await elementQuestApi.analyzeElementsTemporary(chartData.value)
+    
+    if (result) {
+      elementAnalysis.value = result.element_analysis
+      energyTags.value = result.energy_tags || []
+    }
+  } catch (error) {
+    console.error('元素分析失败:', error)
+  } finally {
+    analyzingElements.value = false
+  }
+}
+
+async function goToElementQuest() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再开启盲盒寻宝')
+    router.push({ path: '/login', query: { redirect: '/element-quest' } })
+    return
+  }
+
+  if (!chartData.value) {
+    ElMessage.warning('请先计算星盘')
+    return
+  }
+
+  if (!selectedChartId.value) {
+    try {
+      const result = await chartApi.saveChart({
+        name: astroForm.name || '未命名星盘',
+        birth_date: astroForm.birthDate,
+        birth_time: astroForm.birthTime,
+        birth_place: astroForm.birthPlace,
+        latitude: astroForm.latitude,
+        longitude: astroForm.longitude,
+        house_system: astroForm.houseSystem,
+        chart_data: JSON.stringify(chartData.value)
+      })
+      
+      if (result?.id) {
+        selectedChartId.value = result.id
+        ElMessage.success('星盘已保存，即将开启寻宝')
+      }
+    } catch (error) {
+      console.error('保存星盘失败:', error)
+      ElMessage.error('保存星盘失败，请重试')
+      return
+    }
+  }
+
+  router.push('/element-quest')
+}
+
+async function goToPhaseConnect() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再开启相位连连看')
+    router.push({ path: '/login', query: { redirect: '/phase-connect' } })
+    return
+  }
+
+  if (!chartData.value) {
+    ElMessage.warning('请先计算星盘')
+    return
+  }
+
+  if (!selectedChartId.value) {
+    try {
+      const result = await chartApi.saveChart({
+        name: astroForm.name || '未命名星盘',
+        birth_date: astroForm.birthDate,
+        birth_time: astroForm.birthTime,
+        birth_place: astroForm.birthPlace,
+        latitude: astroForm.latitude,
+        longitude: astroForm.longitude,
+        house_system: astroForm.houseSystem,
+        chart_data: JSON.stringify(chartData.value)
+      })
+      
+      if (result?.id) {
+        selectedChartId.value = result.id
+        ElMessage.success('星盘已保存，即将开启相位连接')
+      }
+    } catch (error) {
+      console.error('保存星盘失败:', error)
+      ElMessage.error('保存星盘失败，请重试')
+      return
+    }
+  }
+
+  router.push('/phase-connect')
 }
 
 async function saveChart() {
@@ -2806,6 +3042,459 @@ function selectQuickCity(city) {
   @media (max-width: 900px) {
     width: 100%;
     max-width: 520px;
+  }
+}
+
+.elements-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.elements-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(139, 92, 246, 0.2);
+  border-top-color: #a78bfa;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.elements-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+}
+
+.empty-icon {
+  font-size: 2.5rem;
+}
+
+.elements-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.element-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+  }
+}
+
+.total-score {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(139, 92, 246, 0.1);
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.energy-progress-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(30, 30, 60, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: rgba(139, 92, 246, 0.25);
+    background: rgba(40, 40, 80, 0.3);
+  }
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.element-symbol {
+  font-size: 1.2rem;
+}
+
+.element-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.element-score {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: auto;
+}
+
+.element-level {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  
+  &.abundant {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+  }
+  
+  &.strong {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+  }
+  
+  &.balanced {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+  }
+  
+  &.weak {
+    background: rgba(249, 115, 22, 0.2);
+    color: #f97316;
+  }
+  
+  &.deficient {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+}
+
+.progress-bar-container {
+  position: relative;
+  height: 10px;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease;
+  
+  &.fire {
+    background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);
+  }
+  
+  &.earth {
+    background: linear-gradient(90deg, #a16207 0%, #ca8a04 100%);
+  }
+  
+  &.air {
+    background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+  }
+  
+  &.water {
+    background: linear-gradient(90deg, #06b6d4 0%, #22d3ee 100%);
+  }
+}
+
+.progress-percent {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.progress-detail {
+  display: flex;
+  gap: 16px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  
+  .planet-info,
+  .aspect-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+.energy-tags-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(30, 30, 60, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  
+  h5 {
+    margin: 0;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+  }
+}
+
+.energy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.energy-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+  
+  &.dominant {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.2) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+  }
+  
+  &.deficient {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(239, 68, 68, 0.15) 100%);
+    border: 1px solid rgba(249, 115, 22, 0.25);
+  }
+  
+  &.trait {
+    background: rgba(30, 30, 60, 0.5);
+    border: 1px solid rgba(139, 92, 246, 0.15);
+  }
+}
+
+.tag-icon {
+  font-size: 0.9rem;
+}
+
+.tag-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.tag-desc {
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deficiency-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 10px;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  
+  h5 {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #f97316;
+    font-weight: 600;
+  }
+}
+
+.deficiency-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.deficiency-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deficiency-symbol {
+  font-size: 1.3rem;
+}
+
+.deficiency-name {
+  font-size: 0.95rem;
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.deficiency-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  
+  p {
+    margin: 0;
+    
+    strong {
+      color: rgba(255, 255, 255, 0.85);
+    }
+  }
+}
+
+.deficiency-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  
+  h6 {
+    margin: 0;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+  }
+  
+  ul {
+    margin: 0;
+    padding-left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    
+    li {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.55);
+      line-height: 1.4;
+    }
+  }
+}
+
+.quest-entrance {
+  margin-top: 8px;
+}
+
+.entrance-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: rgba(139, 92, 246, 0.4);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.2) 100%);
+  }
+}
+
+.entrance-icon {
+  font-size: 1.8rem;
+}
+
+.entrance-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  
+  h5 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+  }
+  
+  p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+.entrance-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.arrow {
+  font-size: 0.9rem;
+  transition: transform 0.3s ease;
+}
+
+.entrance-btn:hover .arrow {
+  transform: translateX(2px);
+}
+
+.phase-connect-entrance .entrance-content {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
+  border: 1px solid rgba(236, 72, 153, 0.25);
+  
+  &:hover {
+    border-color: rgba(236, 72, 153, 0.4);
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.25) 0%, rgba(139, 92, 246, 0.2) 100%);
+  }
+}
+
+.phase-connect-btn {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  
+  &:hover {
+    box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
   }
 }
 </style>

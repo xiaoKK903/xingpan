@@ -1,709 +1,890 @@
 import logging
 import json
+import random
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from enum import Enum
+from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
 
-from app.models import (
-    CommunityEnergySnapshot,
-    EnergyMission,
-    EnergyContribution
+from app.services.ephemeris_calculator import get_ephemeris_calculator
+from app.services.transit_service import (
+    get_transit_analysis_engine,
+    calculate_moon_phase,
+    check_mercury_retrograde
 )
-from app.services.community_energy_service import (
-    CommunityEnergyService,
-    community_energy_service
-)
-from app.services.energy_scoring import (
-    EnergyScoringEngine,
-    Dimension,
-    DIMENSION_CONFIG,
-    energy_scoring_engine
-)
+from app.services.community_energy_service import community_energy_service
+from app.astro import MAIN_PLANETS, longitude_to_zodiac
 
 logger = logging.getLogger(__name__)
 
-WEATHER_TYPES = {
-    "sunny": {"icon": "☀️", "label": "晴朗", "description": "能量充沛，适合积极行动"},
-    "cloudy": {"icon": "⛅", "label": "多云", "description": "能量适中，保持稳健即可"},
-    "partly_cloudy": {"icon": "🌤️", "label": "晴间多云", "description": "能量有起伏，需灵活应对"},
-    "overcast": {"icon": "🌥️", "label": "阴天", "description": "能量较低，建议调整节奏"},
-    "rainy": {"icon": "🌧️", "label": "雷雨", "description": "能量动荡，建议谨慎行事"},
-    "stormy": {"icon": "⛈️", "label": "风暴", "description": "能量剧烈波动，需特别注意"}
+ephemeris = get_ephemeris_calculator()
+transit_engine = get_transit_analysis_engine()
+
+
+class WeatherSeverity(str, Enum):
+    CLEAR = "clear"
+    MILD = "mild"
+    MODERATE = "moderate"
+    SEVERE = "severe"
+    CRITICAL = "critical"
+
+
+class CollectiveMood(str, Enum):
+    HARMONIOUS = "harmonious"
+    BALANCED = "balanced"
+    TENSE = "tense"
+    CHALLENGING = "challenging"
+
+
+WEATHER_SEVERITY_CONFIG = {
+    WeatherSeverity.CLEAR: {
+        "label": "晴朗",
+        "icon": "☀️",
+        "color": "#F59E0B",
+        "bg_color": "#FFFBEB",
+        "description": "星象晴朗，能量充沛，适合积极行动。"
+    },
+    WeatherSeverity.MILD: {
+        "label": "多云",
+        "icon": "⛅",
+        "color": "#6B7280",
+        "bg_color": "#F3F4F6",
+        "description": "星象多云，能量适中，保持稳健即可。"
+    },
+    WeatherSeverity.MODERATE: {
+        "label": "阴天",
+        "icon": "🌥️",
+        "color": "#4B5563",
+        "bg_color": "#E5E7EB",
+        "description": "星象阴沉，能量较低，建议调整节奏。"
+    },
+    WeatherSeverity.SEVERE: {
+        "label": "雷雨",
+        "icon": "⛈️",
+        "color": "#DC2626",
+        "bg_color": "#FEF2F2",
+        "description": "星象动荡，建议谨慎行事，避免冲动决策。",
+        "is_warning": True
+    },
+    WeatherSeverity.CRITICAL: {
+        "label": "红色预警",
+        "icon": "🚨",
+        "color": "#991B1B",
+        "bg_color": "#FEE2E2",
+        "description": "凶星天象强烈，务必谨慎行事，避免重大决策。",
+        "is_warning": True,
+        "is_critical": True
+    }
 }
 
-MOOD_LEVELS = {
-    "harmonious": {"icon": "😊", "label": "和谐", "color": "#22c55e"},
-    "balanced": {"icon": "😐", "label": "平稳", "color": "#64748b"},
-    "challenging": {"icon": "😰", "label": "紧张", "color": "#ef4444"}
-}
 
-ENERGY_CONTRIBUTION_TYPES = {
-    "jupiter": {
-        "name": "木星好运",
-        "planet": "木星",
-        "icon": "♃",
-        "color": "#22c55e",
-        "description": "注入乐观、扩张、好运能量",
-        "base_energy": 10.0,
-        "cost_stardust": 5,
-        "duration_minutes": 30,
-        "target_dimensions": ["wealth", "career", "social"]
-    },
-    "venus": {
-        "name": "金星魅力",
-        "planet": "金星",
-        "icon": "♀",
-        "color": "#ec4899",
-        "description": "注入爱、美、社交魅力能量",
-        "base_energy": 10.0,
-        "cost_stardust": 5,
-        "duration_minutes": 30,
-        "target_dimensions": ["social", "emotion", "communication"]
-    },
-    "mars": {
-        "name": "火星行动力",
-        "planet": "火星",
-        "icon": "♂",
-        "color": "#ef4444",
-        "description": "注入行动、勇气、竞争能量",
-        "base_energy": 10.0,
-        "cost_stardust": 5,
-        "duration_minutes": 30,
-        "target_dimensions": ["career", "communication"]
-    },
-    "mercury": {
-        "name": "水星智慧",
+OMINOUS_EVENTS = {
+    "mercury_retrograde": {
+        "name": "水星逆行",
         "planet": "水星",
         "icon": "☿",
-        "color": "#60a5fa",
-        "description": "注入思维、沟通、学习能量",
+        "severity": WeatherSeverity.SEVERE,
+        "description": "水星逆行期间，注意沟通细节、电子设备备份、出行计划预留缓冲时间。",
+        "affected_areas": ["沟通", "交通", "电子设备", "合同签署"],
+        "recommendations": [
+            "备份重要数据",
+            "出行预留缓冲时间",
+            "沟通时保持耐心",
+            "避免签署重要合同"
+        ]
+    },
+    "mars_retrograde": {
+        "name": "火星逆行",
+        "planet": "火星",
+        "icon": "♂",
+        "severity": WeatherSeverity.CRITICAL,
+        "description": "火星逆行期间，行动力受阻，容易冲动或压抑愤怒，需特别注意安全和情绪管理。",
+        "affected_areas": ["行动力", "情绪", "安全", "竞争"],
+        "recommendations": [
+            "避免冲动决策",
+            "注意安全防护",
+            "合理释放情绪",
+            "推迟重大行动"
+        ]
+    },
+    "saturn_retrograde": {
+        "name": "土星逆行",
+        "planet": "土星",
+        "icon": "♄",
+        "severity": WeatherSeverity.SEVERE,
+        "description": "土星逆行期间，业力显现，过去的责任和未完成的事业需要面对。",
+        "affected_areas": ["责任", "业力", "事业", "限制"],
+        "recommendations": [
+            "面对过去未完成的责任",
+            "重新评估长期目标",
+            "保持耐心和坚持",
+            "学会放下负担"
+        ]
+    },
+    "mars_square_saturn": {
+        "name": "火星四分土星",
+        "planets": ["火星", "土星"],
+        "icon": "♂□♄",
+        "severity": WeatherSeverity.CRITICAL,
+        "description": "火星与土星形成四分相，行动欲望与现实限制剧烈冲突，容易产生挫折感和愤怒。",
+        "affected_areas": ["行动力", "限制", "挫折", "愤怒"],
+        "recommendations": [
+            "保持冷静，避免冲动",
+            "将挫折转化为动力",
+            "接受现实限制",
+            "寻找建设性的出口"
+        ]
+    },
+    "uranus_square_pluto": {
+        "name": "天王星四分冥王星",
+        "planets": ["天王星", "冥王星"],
+        "icon": "♅□♇",
+        "severity": WeatherSeverity.CRITICAL,
+        "description": "天王星与冥王星形成四分相，突变与深层转化的冲突，社会结构和个人生活都可能经历剧变。",
+        "affected_areas": ["突变", "转化", "权力", "社会变革"],
+        "recommendations": [
+            "保持灵活，适应变化",
+            "放下控制欲",
+            "拥抱不确定性",
+            "寻找内心的稳定"
+        ]
+    },
+    "full_moon_eclipse": {
+        "name": "月食",
+        "planet": "月亮",
+        "icon": "🌕",
+        "severity": WeatherSeverity.SEVERE,
+        "description": "月食期间，情绪能量被放大，可能带来情绪的释放和关系的转折。",
+        "affected_areas": ["情绪", "关系", "释放", "完结"],
+        "recommendations": [
+            "注意情绪波动",
+            "适合释放和放下",
+            "关注亲密关系",
+            "保持情绪平衡"
+        ]
+    },
+    "solar_eclipse": {
+        "name": "日食",
+        "planet": "太阳",
+        "icon": "🌑",
+        "severity": WeatherSeverity.SEVERE,
+        "description": "日食期间，新的开始被强调，但也可能伴随着不确定性。",
+        "affected_areas": ["新开始", "自我", "目标", "不确定性"],
+        "recommendations": [
+            "设定新意图",
+            "保持开放心态",
+            "观察而非强迫",
+            "为新机会做好准备"
+        ]
+    }
+}
+
+
+ENERGY_CONTRIBUTION_TYPES = {
+    "sun_energy": {
+        "name": "太阳能量",
+        "planet": "太阳",
+        "icon": "☀️",
+        "color": "#F59E0B",
+        "description": "注入太阳的光芒和活力，提升自信和创造力",
+        "base_energy": 15.0,
+        "cost_stardust": 8,
+        "duration_minutes": 60,
+        "target_dimensions": ["career", "social"]
+    },
+    "moon_energy": {
+        "name": "月亮能量",
+        "planet": "月亮",
+        "icon": "🌙",
+        "color": "#8B5CF6",
+        "description": "注入月亮的温柔和直觉，提升情绪感知力",
+        "base_energy": 12.0,
+        "cost_stardust": 6,
+        "duration_minutes": 45,
+        "target_dimensions": ["emotion", "social"]
+    },
+    "mercury_energy": {
+        "name": "水星能量",
+        "planet": "水星",
+        "icon": "☿",
+        "color": "#10B981",
+        "description": "注入水星的智慧和敏捷，提升沟通和思维能力",
         "base_energy": 10.0,
         "cost_stardust": 5,
         "duration_minutes": 30,
         "target_dimensions": ["communication", "career"]
     },
-    "moon": {
-        "name": "月亮情绪",
-        "planet": "月亮",
-        "icon": "☽",
-        "color": "#a78bfa",
-        "description": "注入情感、直觉、滋养能量",
-        "base_energy": 10.0,
-        "cost_stardust": 5,
-        "duration_minutes": 30,
-        "target_dimensions": ["emotion", "social"]
+    "venus_energy": {
+        "name": "金星能量",
+        "planet": "金星",
+        "icon": "♀",
+        "color": "#EC4899",
+        "description": "注入金星的爱与美，提升社交和财运",
+        "base_energy": 14.0,
+        "cost_stardust": 7,
+        "duration_minutes": 50,
+        "target_dimensions": ["social", "wealth"]
     },
-    "sun": {
-        "name": "太阳活力",
-        "planet": "太阳",
-        "icon": "☉",
-        "color": "#f59e0b",
-        "description": "注入自信、创造、领导力能量",
-        "base_energy": 15.0,
+    "mars_energy": {
+        "name": "火星能量",
+        "planet": "火星",
+        "icon": "♂",
+        "color": "#EF4444",
+        "description": "注入火星的勇气和行动力，提升竞争和行动力",
+        "base_energy": 18.0,
         "cost_stardust": 10,
-        "duration_minutes": 45,
-        "target_dimensions": ["career", "social", "emotion"]
+        "duration_minutes": 60,
+        "target_dimensions": ["career", "emotion"]
+    },
+    "jupiter_energy": {
+        "name": "木星能量",
+        "planet": "木星",
+        "icon": "♃",
+        "color": "#3B82F6",
+        "description": "注入木星的扩张和幸运，提升各领域运势",
+        "base_energy": 20.0,
+        "cost_stardust": 12,
+        "duration_minutes": 90,
+        "target_dimensions": ["wealth", "career", "social"]
+    },
+    "saturn_energy": {
+        "name": "土星能量",
+        "planet": "土星",
+        "icon": "♄",
+        "color": "#6B7280",
+        "description": "注入土星的稳定和责任，提升长期规划能力",
+        "base_energy": 16.0,
+        "cost_stardust": 9,
+        "duration_minutes": 75,
+        "target_dimensions": ["career", "wealth"]
     }
 }
 
 
+WARM_MISSION_TEMPLATES = {
+    "harmonious_high": [
+        {
+            "id": "compliment_others",
+            "title": "善意赞美",
+            "description": "在广场上找到一位用户，真心赞美他们的星盘特质或头像",
+            "difficulty": "easy",
+            "base_reward": 15,
+            "duration_minutes": 10,
+            "mood_trigger": "harmonious",
+            "energy_requirement": 5.0,
+            "mission_type": "social_interaction"
+        },
+        {
+            "id": "share_gratitude",
+            "title": "感恩分享",
+            "description": "分享一件今天让你感恩的事情，传递正能量",
+            "difficulty": "easy",
+            "base_reward": 12,
+            "duration_minutes": 5,
+            "mood_trigger": "harmonious",
+            "energy_requirement": 3.0,
+            "mission_type": "expression"
+        },
+        {
+            "id": "join_encounter",
+            "title": "缘分相遇",
+            "description": "主动发起一次广场相遇，与他人建立连接",
+            "difficulty": "medium",
+            "base_reward": 25,
+            "duration_minutes": 15,
+            "mood_trigger": "harmonious",
+            "energy_requirement": 10.0,
+            "mission_type": "encounter"
+        }
+    ],
+    "balanced": [
+        {
+            "id": "check_horoscope",
+            "title": "今日运势",
+            "description": "查看你的每日运势，了解今日能量指引",
+            "difficulty": "easy",
+            "base_reward": 8,
+            "duration_minutes": 3,
+            "mood_trigger": "balanced",
+            "energy_requirement": 0.0,
+            "mission_type": "exploration"
+        },
+        {
+            "id": "review_chart",
+            "title": "星盘回顾",
+            "description": "回顾你的本命盘，发现一个你之前忽略的特质",
+            "difficulty": "medium",
+            "base_reward": 18,
+            "duration_minutes": 8,
+            "mood_trigger": "balanced",
+            "energy_requirement": 5.0,
+            "mission_type": "self_reflection"
+        },
+        {
+            "id": "energy_contribution",
+            "title": "能量注入",
+            "description": "向广场注入一份行星能量，提升集体场域",
+            "difficulty": "medium",
+            "base_reward": 20,
+            "duration_minutes": 5,
+            "mood_trigger": "balanced",
+            "energy_requirement": 8.0,
+            "mission_type": "contribution"
+        }
+    ],
+    "tense": [
+        {
+            "id": "deep_breath",
+            "title": "深呼吸",
+            "description": "花一分钟时间深呼吸，让自己平静下来",
+            "difficulty": "easy",
+            "base_reward": 10,
+            "duration_minutes": 2,
+            "mood_trigger": "tense",
+            "energy_requirement": 0.0,
+            "mission_type": "self_care"
+        },
+        {
+            "id": "write_journal",
+            "title": "情绪日记",
+            "description": "写下此刻的情绪感受，表达而不压抑",
+            "difficulty": "easy",
+            "base_reward": 12,
+            "duration_minutes": 5,
+            "mood_trigger": "tense",
+            "energy_requirement": 2.0,
+            "mission_type": "expression"
+        },
+        {
+            "id": "seek_support",
+            "title": "寻求支持",
+            "description": "在广场上找到一位让你感到安全的人，分享你的感受",
+            "difficulty": "medium",
+            "base_reward": 30,
+            "duration_minutes": 15,
+            "mood_trigger": "tense",
+            "energy_requirement": 10.0,
+            "mission_type": "social_interaction"
+        }
+    ],
+    "challenging": [
+        {
+            "id": "grounding_exercise",
+            "title": "接地练习",
+            "description": "感受你的双脚，与大地连接，让自己稳定下来",
+            "difficulty": "easy",
+            "base_reward": 15,
+            "duration_minutes": 3,
+            "mood_trigger": "challenging",
+            "energy_requirement": 0.0,
+            "mission_type": "self_care"
+        },
+        {
+            "id": "self_compassion",
+            "title": "自我慈悲",
+            "description": "对自己说几句温柔的话，就像对待最好的朋友一样",
+            "difficulty": "easy",
+            "base_reward": 15,
+            "duration_minutes": 3,
+            "mood_trigger": "challenging",
+            "energy_requirement": 0.0,
+            "mission_type": "self_care"
+        },
+        {
+            "id": "energy_balancing",
+            "title": "能量平衡",
+            "description": "查看你的元素能量分布，找出需要调整的地方",
+            "difficulty": "medium",
+            "base_reward": 25,
+            "duration_minutes": 10,
+            "mood_trigger": "challenging",
+            "energy_requirement": 5.0,
+            "mission_type": "self_reflection"
+        },
+        {
+            "id": "professional_help",
+            "title": "专业支持",
+            "description": "如果感到困难，考虑寻求专业心理咨询师的帮助",
+            "difficulty": "easy",
+            "base_reward": 20,
+            "duration_minutes": 1,
+            "mood_trigger": "challenging",
+            "energy_requirement": 0.0,
+            "mission_type": "awareness"
+        }
+    ]
+}
+
+
+@dataclass
+class EnergyWeatherSnapshot:
+    snapshot_id: str
+    timestamp: datetime
+    
+    overall_energy_score: float
+    collective_mood: str
+    collective_mood_label: str
+    
+    weather_severity: WeatherSeverity
+    weather_label: str
+    weather_icon: str
+    
+    online_user_count: int
+    users_with_chart: int
+    
+    dominant_planets: List[Dict[str, Any]]
+    dominant_aspects: List[Dict[str, Any]]
+    
+    ominous_events: List[Dict[str, Any]]
+    has_warning: bool
+    warning_level: str
+    
+    dimension_energies: List[Dict[str, Any]]
+    
+    moon_phase: Optional[Dict[str, Any]] = None
+    mercury_status: Optional[Dict[str, Any]] = None
+    
+    transit_aspects: List[Dict[str, Any]] = field(default_factory=list)
+    
+    triggered_missions: List[Dict[str, Any]] = field(default_factory=list)
+
+
 class EnergyWeatherService:
     """
-    能量天气播报服务
+    能量气象站服务
     
     职责：
-    - 生成每日集体情绪指数
-    - 生成能量天气播报
-    - 分析能量趋势
-    - 触发能量任务
+    - 每小时统计在线用户星盘 + 天象夹角
+    - 计算全场当日能量值
+    - 检测凶星天象并预警
+    - 根据集体情绪推送暖心小任务
+    - 管理星元碎片奖励
     """
     
     def __init__(self):
-        self._community_service = community_energy_service
+        self._last_snapshot: Optional[EnergyWeatherSnapshot] = None
+        self._snapshot_history: List[EnergyWeatherSnapshot] = []
+        self._max_history_size = 24
     
-    def get_current_weather(
-        self,
-        db: Session,
-        scope: str = "global",
-        city: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def detect_current_transit_events(self, db: Session) -> List[Dict[str, Any]]:
         """
-        获取当前能量天气
+        检测当前的天象事件，包括凶星天象
         
-        Args:
-            db: 数据库会话
-            scope: 范围
-            city: 城市
-            
         Returns:
-            能量天气数据
+            事件列表，按严重程度排序
         """
-        latest_snapshot = self._community_service.get_latest_snapshot(db, scope, city)
+        events = []
+        now = datetime.now()
         
-        if not latest_snapshot:
-            snapshot = self._community_service.create_snapshot(db, scope, city)
-            latest_snapshot = self._community_service._snapshot_to_dict(snapshot)
+        try:
+            jd, _ = ephemeris.local_time_to_julday(
+                now.year, now.month, now.day,
+                now.hour, now.minute,
+                39.9042, 116.4074
+            )
+            
+            moon_phase = calculate_moon_phase(jd)
+            if moon_phase.get("is_full_moon"):
+                events.append({
+                    "type": "lunar_event",
+                    "event_key": "full_moon",
+                    "name": "满月",
+                    "icon": "🌕",
+                    "severity": WeatherSeverity.MILD.value,
+                    "description": "今日满月，情绪能量高涨。",
+                    "is_ominous": False
+                })
+            elif moon_phase.get("is_new_moon"):
+                events.append({
+                    "type": "lunar_event",
+                    "event_key": "new_moon",
+                    "name": "新月",
+                    "icon": "🌑",
+                    "severity": WeatherSeverity.MILD.value,
+                    "description": "今日新月，适合设定新目标。",
+                    "is_ominous": False
+                })
+            
+            mercury_retro = check_mercury_retrograde(jd)
+            if mercury_retro.get("is_retrograde"):
+                ominous_config = OMINOUS_EVENTS["mercury_retrograde"]
+                events.append({
+                    "type": "planetary_event",
+                    "event_key": "mercury_retrograde",
+                    "name": ominous_config["name"],
+                    "planet": ominous_config["planet"],
+                    "icon": ominous_config["icon"],
+                    "severity": ominous_config["severity"].value,
+                    "description": ominous_config["description"],
+                    "affected_areas": ominous_config["affected_areas"],
+                    "recommendations": ominous_config["recommendations"],
+                    "is_ominous": True,
+                    "is_warning": True
+                })
+            
+            transit_planets = ephemeris.calculate_multiple_planets(jd, MAIN_PLANETS)
+            
+            for planet in transit_planets:
+                if planet.get("is_retrograde"):
+                    planet_name = planet.get("name", "")
+                    
+                    if planet_name == "火星":
+                        ominous_config = OMINOUS_EVENTS["mars_retrograde"]
+                        events.append({
+                            "type": "planetary_event",
+                            "event_key": "mars_retrograde",
+                            "name": ominous_config["name"],
+                            "planet": ominous_config["planet"],
+                            "icon": ominous_config["icon"],
+                            "severity": ominous_config["severity"].value,
+                            "description": ominous_config["description"],
+                            "affected_areas": ominous_config["affected_areas"],
+                            "recommendations": ominous_config["recommendations"],
+                            "is_ominous": True,
+                            "is_warning": True,
+                            "is_critical": True
+                        })
+                    elif planet_name == "土星":
+                        ominous_config = OMINOUS_EVENTS["saturn_retrograde"]
+                        events.append({
+                            "type": "planetary_event",
+                            "event_key": "saturn_retrograde",
+                            "name": ominous_config["name"],
+                            "planet": ominous_config["planet"],
+                            "icon": ominous_config["icon"],
+                            "severity": ominous_config["severity"].value,
+                            "description": ominous_config["description"],
+                            "affected_areas": ominous_config["affected_areas"],
+                            "recommendations": ominous_config["recommendations"],
+                            "is_ominous": True,
+                            "is_warning": True
+                        })
+            
+            aspects = ephemeris.calculate_all_aspects(transit_planets, transit_planets)
+            
+            for aspect in aspects:
+                p1 = aspect.get("planet1_name", "")
+                p2 = aspect.get("planet2_name", "")
+                aspect_type = aspect.get("name", "")
+                nature = aspect.get("nature", "neutral")
+                
+                if ((p1 == "火星" and p2 == "土星") or (p1 == "土星" and p2 == "火星")) and aspect_type == "四分相":
+                    ominous_config = OMINOUS_EVENTS["mars_square_saturn"]
+                    events.append({
+                        "type": "aspect_event",
+                        "event_key": "mars_square_saturn",
+                        "name": ominous_config["name"],
+                        "planets": ominous_config["planets"],
+                        "icon": ominous_config["icon"],
+                        "severity": ominous_config["severity"].value,
+                        "description": ominous_config["description"],
+                        "affected_areas": ominous_config["affected_areas"],
+                        "recommendations": ominous_config["recommendations"],
+                        "aspect_type": aspect_type,
+                        "is_ominous": True,
+                        "is_warning": True,
+                        "is_critical": True
+                    })
+                
+                elif ((p1 == "天王星" and p2 == "冥王星") or (p1 == "冥王星" and p2 == "天王星")) and aspect_type == "四分相":
+                    ominous_config = OMINOUS_EVENTS["uranus_square_pluto"]
+                    events.append({
+                        "type": "aspect_event",
+                        "event_key": "uranus_square_pluto",
+                        "name": ominous_config["name"],
+                        "planets": ominous_config["planets"],
+                        "icon": ominous_config["icon"],
+                        "severity": ominous_config["severity"].value,
+                        "description": ominous_config["description"],
+                        "affected_areas": ominous_config["affected_areas"],
+                        "recommendations": ominous_config["recommendations"],
+                        "aspect_type": aspect_type,
+                        "is_ominous": True,
+                        "is_warning": True,
+                        "is_critical": True
+                    })
+            
+            events.sort(key=lambda x: {
+                WeatherSeverity.CRITICAL.value: 5,
+                WeatherSeverity.SEVERE.value: 4,
+                WeatherSeverity.MODERATE.value: 3,
+                WeatherSeverity.MILD.value: 2,
+                WeatherSeverity.CLEAR.value: 1
+            }.get(x.get("severity", WeatherSeverity.MILD.value), 1), reverse=True)
+            
+        except Exception as e:
+            logger.error(f"检测天象事件失败: {e}")
         
-        online_users = self._community_service.get_online_users(db, scope, city)
+        return events
+    
+    def calculate_hourly_energy(self, db: Session) -> EnergyWeatherSnapshot:
+        """
+        每小时能量统计
+        
+        统计所有在线用户的星盘 + 天象夹角，计算全场能量值
+        """
+        now = datetime.utcnow()
+        
+        online_users = community_energy_service.get_online_users(db, scope="global")
         online_count = len(online_users)
         
-        active_contributions = self._get_active_contributions(db, scope, city)
+        planet_distribution = community_energy_service.aggregate_planet_distribution(db, online_users)
+        aspect_distribution = community_energy_service.aggregate_aspect_distribution(db, online_users)
         
-        overall_score = latest_snapshot.get("overall_energy_score", 50.0)
-        overall_mood = latest_snapshot.get("overall_mood", "balanced")
+        users_with_chart = planet_distribution.get("total_users", 0)
         
-        weather_type = self._score_to_weather(overall_score)
-        weather_info = WEATHER_TYPES.get(weather_type, WEATHER_TYPES["cloudy"])
+        collective_energy = community_energy_service.calculate_community_energy(
+            db, online_users, aspect_distribution
+        )
         
-        mood_info = MOOD_LEVELS.get(overall_mood, MOOD_LEVELS["balanced"])
+        overall_score = collective_energy.get("overall_score", 50.0)
+        overall_mood = collective_energy.get("overall_mood", "neutral")
+        overall_mood_label = collective_energy.get("overall_mood_label", "平稳")
         
-        dimension_energies = latest_snapshot.get("dimension_energies", [])
+        ominous_events = self.detect_current_transit_events(db)
         
-        high_dimensions = [d for d in dimension_energies if d.get("level") in ["high", "medium_high"]]
-        low_dimensions = [d for d in dimension_energies if d.get("level") in ["low", "medium_low"]]
+        has_warning = any(e.get("is_warning", False) for e in ominous_events)
+        has_critical = any(e.get("is_critical", False) for e in ominous_events)
         
-        dominant_planets = latest_snapshot.get("dominant_planets", [])
-        dominant_aspects = latest_snapshot.get("dominant_aspects", [])
+        weather_severity = self._determine_weather_severity(
+            overall_score, overall_mood, has_warning, has_critical, ominous_events
+        )
         
-        aspect_distribution = latest_snapshot.get("aspect_distribution", {})
-        by_nature = aspect_distribution.get("by_nature", {})
+        weather_config = WEATHER_SEVERITY_CONFIG[weather_severity]
         
-        return {
-            "timestamp": datetime.utcnow().isoformat(),
-            "scope": scope,
-            "city": city,
+        jd, _ = ephemeris.local_time_to_julday(
+            now.year, now.month, now.day,
+            now.hour, now.minute,
+            39.9042, 116.4074
+        )
+        moon_phase = calculate_moon_phase(jd)
+        mercury_status = check_mercury_retrograde(jd)
+        
+        transit_planets = ephemeris.calculate_multiple_planets(jd, MAIN_PLANETS)
+        transit_aspects = ephemeris.calculate_all_aspects(transit_planets, transit_planets)
+        
+        snapshot_id = f"weather_{now.strftime('%Y%m%d%H%M%S')}_{random.randint(1000, 9999)}"
+        
+        snapshot = EnergyWeatherSnapshot(
+            snapshot_id=snapshot_id,
+            timestamp=now,
             
-            "weather": {
-                "type": weather_type,
-                "icon": weather_info["icon"],
-                "label": weather_info["label"],
-                "description": weather_info["description"]
-            },
+            overall_energy_score=overall_score,
+            collective_mood=overall_mood,
+            collective_mood_label=overall_mood_label,
             
-            "mood": {
-                "type": overall_mood,
-                "icon": mood_info["icon"],
-                "label": mood_info["label"],
-                "color": mood_info["color"]
-            },
+            weather_severity=weather_severity,
+            weather_label=weather_config["label"],
+            weather_icon=weather_config["icon"],
             
-            "energy_score": {
-                "current": round(overall_score, 1),
-                "min": 0,
-                "max": 100
-            },
+            online_user_count=online_count,
+            users_with_chart=users_with_chart,
             
-            "community_stats": {
-                "online_users": online_count,
-                "total_users": latest_snapshot.get("total_users", 0),
-                "active_contributions": len(active_contributions)
-            },
+            dominant_planets=planet_distribution.get("dominant_planets", []),
+            dominant_aspects=aspect_distribution.get("dominant_aspects", []),
             
-            "dimensions": dimension_energies,
-            "high_dimensions": high_dimensions,
-            "low_dimensions": low_dimensions,
+            ominous_events=ominous_events,
+            has_warning=has_warning,
+            warning_level="critical" if has_critical else "severe" if has_warning else "none",
             
-            "dominant_planets": dominant_planets[:5],
-            "dominant_aspects": dominant_aspects[:5],
+            dimension_energies=collective_energy.get("dimensions", []),
             
-            "aspect_stats": {
-                "harmonious": by_nature.get("harmonious", 0),
-                "challenging": by_nature.get("challenging", 0),
-                "neutral": by_nature.get("neutral", 0),
-                "total": by_nature.get("harmonious", 0) + by_nature.get("challenging", 0) + by_nature.get("neutral", 0)
-            },
+            moon_phase=moon_phase,
+            mercury_status=mercury_status,
             
-            "active_contributions": active_contributions,
-            
-            "broadcast": self._generate_broadcast(
-                weather_info, mood_info, overall_score, 
-                high_dimensions, low_dimensions, dominant_planets
-            )
-        }
+            transit_aspects=transit_aspects[:10]
+        )
+        
+        triggered_missions = self._generate_missions_for_mood(
+            overall_mood, weather_severity, has_warning
+        )
+        snapshot.triggered_missions = triggered_missions
+        
+        self._last_snapshot = snapshot
+        self._snapshot_history.append(snapshot)
+        if len(self._snapshot_history) > self._max_history_size:
+            self._snapshot_history.pop(0)
+        
+        logger.info(
+            f"能量气象站快照已生成: ID={snapshot_id}, "
+            f"在线用户={online_count}, 能量分数={overall_score}, "
+            f"天气={weather_config['label']}, 预警={has_warning}"
+        )
+        
+        return snapshot
     
-    def get_weather_history(
+    def _determine_weather_severity(
         self,
-        db: Session,
-        scope: str = "global",
-        city: Optional[str] = None,
-        hours: int = 24
-    ) -> Dict[str, Any]:
+        overall_score: float,
+        overall_mood: str,
+        has_warning: bool,
+        has_critical: bool,
+        ominous_events: List[Dict[str, Any]]
+    ) -> WeatherSeverity:
         """
-        获取能量天气历史
-        
-        Args:
-            db: 数据库会话
-            scope: 范围
-            city: 城市
-            hours: 小时数
-            
-        Returns:
-            天气历史数据
+        根据能量分数和凶星天象确定天气严重程度
         """
-        snapshots = self._community_service.get_snapshot_history(db, scope, city, hours)
+        if has_critical:
+            return WeatherSeverity.CRITICAL
         
-        if not snapshots:
-            return {
-                "hours": hours,
-                "total_points": 0,
-                "timestamps": [],
-                "scores": [],
-                "weathers": [],
-                "trend": "stable"
-            }
+        if has_warning:
+            severe_count = sum(
+                1 for e in ominous_events 
+                if e.get("severity") == WeatherSeverity.SEVERE.value
+            )
+            if severe_count >= 2:
+                return WeatherSeverity.CRITICAL
+            return WeatherSeverity.SEVERE
         
-        timestamps = []
-        scores = []
-        weathers = []
-        mood_changes = []
-        
-        for snapshot in snapshots:
-            timestamps.append(snapshot.get("snapshot_at"))
-            score = snapshot.get("overall_energy_score", 50.0)
-            scores.append(score)
-            weather_type = self._score_to_weather(score)
-            weathers.append(weather_type)
-            mood_changes.append(snapshot.get("overall_mood", "balanced"))
-        
-        if len(scores) >= 2:
-            first_score = scores[0]
-            last_score = scores[-1]
-            
-            if last_score > first_score + 10:
-                trend = "rising"
-            elif last_score < first_score - 10:
-                trend = "falling"
+        if overall_mood == "harmonious":
+            if overall_score >= 75:
+                return WeatherSeverity.CLEAR
             else:
-                trend = "stable"
+                return WeatherSeverity.MILD
+        elif overall_mood == "challenging":
+            if overall_score < 30:
+                return WeatherSeverity.MODERATE
+            else:
+                return WeatherSeverity.MILD
+        elif overall_mood == "tense":
+            if overall_score < 40:
+                return WeatherSeverity.MODERATE
+            else:
+                return WeatherSeverity.MILD
         else:
-            trend = "stable"
+            if overall_score >= 60:
+                return WeatherSeverity.MILD
+            elif overall_score >= 40:
+                return WeatherSeverity.MILD
+            else:
+                return WeatherSeverity.MODERATE
+    
+    def _generate_missions_for_mood(
+        self,
+        mood: str,
+        weather_severity: WeatherSeverity,
+        has_warning: bool
+    ) -> List[Dict[str, Any]]:
+        """
+        根据集体情绪生成暖心小任务
+        """
+        missions = []
         
-        max_score = max(scores) if scores else 50
-        min_score = min(scores) if scores else 50
-        avg_score = sum(scores) / len(scores) if scores else 50
+        if has_warning or weather_severity in [WeatherSeverity.SEVERE, WeatherSeverity.CRITICAL]:
+            mission_pool = WARM_MISSION_TEMPLATES.get("challenging", [])
+        elif mood == "harmonious":
+            mission_pool = WARM_MISSION_TEMPLATES.get("harmonious_high", [])
+        elif mood == "tense" or mood == "challenging":
+            mission_pool = WARM_MISSION_TEMPLATES.get("tense", [])
+        else:
+            mission_pool = WARM_MISSION_TEMPLATES.get("balanced", [])
+        
+        if mission_pool:
+            selected_count = min(3, len(mission_pool))
+            selected = random.sample(mission_pool, selected_count)
+            
+            for i, mission in enumerate(selected):
+                mission_with_id = mission.copy()
+                mission_with_id["instance_id"] = f"mission_{datetime.now().strftime('%Y%m%d%H%M')}_{i}_{random.randint(100, 999)}"
+                mission_with_id["generated_at"] = datetime.now().isoformat()
+                mission_with_id["expires_at"] = (datetime.now() + timedelta(hours=24)).isoformat()
+                missions.append(mission_with_id)
+        
+        return missions
+    
+    def get_current_weather(self, db: Session) -> Dict[str, Any]:
+        """
+        获取当前能量天气
+        """
+        if self._last_snapshot is None:
+            snapshot = self.calculate_hourly_energy(db)
+        else:
+            now = datetime.utcnow()
+            time_since_last = (now - self._last_snapshot.timestamp).total_seconds()
+            
+            if time_since_last > 3600:
+                snapshot = self.calculate_hourly_energy(db)
+            else:
+                snapshot = self._last_snapshot
+        
+        return self._snapshot_to_dict(snapshot)
+    
+    def get_weather_history(self, hours: int = 12) -> List[Dict[str, Any]]:
+        """
+        获取天气历史
+        """
+        return [
+            self._snapshot_to_dict(s) 
+            for s in self._snapshot_history[-hours:]
+        ]
+    
+    def _snapshot_to_dict(self, snapshot: EnergyWeatherSnapshot) -> Dict[str, Any]:
+        """
+        将快照转换为字典
+        """
+        weather_config = WEATHER_SEVERITY_CONFIG[snapshot.weather_severity]
         
         return {
-            "hours": hours,
-            "total_points": len(snapshots),
-            "trend": trend,
+            "snapshot_id": snapshot.snapshot_id,
+            "timestamp": snapshot.timestamp.isoformat(),
             
-            "timestamps": timestamps,
-            "scores": [round(s, 1) for s in scores],
-            "weathers": weathers,
-            "moods": mood_changes,
+            "overall_energy_score": snapshot.overall_energy_score,
+            "collective_mood": snapshot.collective_mood,
+            "collective_mood_label": snapshot.collective_mood_label,
             
-            "summary": {
-                "max_score": round(max_score, 1),
-                "min_score": round(min_score, 1),
-                "avg_score": round(avg_score, 1),
-                "trend": trend
+            "weather_severity": snapshot.weather_severity.value,
+            "weather_label": snapshot.weather_label,
+            "weather_icon": snapshot.weather_icon,
+            "weather_color": weather_config["color"],
+            "weather_bg_color": weather_config["bg_color"],
+            "weather_description": weather_config["description"],
+            
+            "online_user_count": snapshot.online_user_count,
+            "users_with_chart": snapshot.users_with_chart,
+            
+            "dominant_planets": snapshot.dominant_planets,
+            "dominant_aspects": snapshot.dominant_aspects,
+            
+            "ominous_events": snapshot.ominous_events,
+            "has_warning": snapshot.has_warning,
+            "warning_level": snapshot.warning_level,
+            "is_critical": snapshot.weather_severity == WeatherSeverity.CRITICAL,
+            
+            "dimension_energies": snapshot.dimension_energies,
+            
+            "moon_phase": snapshot.moon_phase,
+            "mercury_status": snapshot.mercury_status,
+            
+            "transit_aspects": snapshot.transit_aspects,
+            
+            "triggered_missions": snapshot.triggered_missions
+        }
+    
+    def get_available_contribution_types(self) -> List[Dict[str, Any]]:
+        """
+        获取可用的能量贡献类型
+        """
+        return [
+            {
+                "type": key,
+                "name": config["name"],
+                "planet": config["planet"],
+                "icon": config["icon"],
+                "color": config["color"],
+                "description": config["description"],
+                "base_energy": config["base_energy"],
+                "cost_stardust": config["cost_stardust"],
+                "duration_minutes": config["duration_minutes"],
+                "target_dimensions": config["target_dimensions"]
             }
-        }
-    
-    def get_forecast(
-        self,
-        db: Session,
-        scope: str = "global",
-        city: Optional[str] = None,
-        hours: int = 6
-    ) -> Dict[str, Any]:
-        """
-        获取能量天气预测
-        
-        Args:
-            db: 数据库会话
-            scope: 范围
-            city: 城市
-            hours: 预测小时数
-            
-        Returns:
-            预测数据
-        """
-        history = self.get_weather_history(db, scope, city, hours=24)
-        current = self.get_current_weather(db, scope, city)
-        
-        scores = history.get("scores", [50.0])
-        base_score = scores[-1] if scores else 50.0
-        
-        forecast_points = []
-        now = datetime.utcnow()
-        
-        for i in range(hours):
-            forecast_time = now + timedelta(hours=i + 1)
-            
-            random_factor = (hash(f"{scope}_{city}_{forecast_time.isoformat()}") % 20 - 10) / 100
-            forecast_score = base_score * (1 + random_factor)
-            forecast_score = max(0, min(100, forecast_score))
-            
-            weather_type = self._score_to_weather(forecast_score)
-            weather_info = WEATHER_TYPES.get(weather_type, WEATHER_TYPES["cloudy"])
-            
-            forecast_points.append({
-                "time": forecast_time.isoformat(),
-                "hour": forecast_time.hour,
-                "score": round(forecast_score, 1),
-                "weather": weather_type,
-                "icon": weather_info["icon"],
-                "label": weather_info["label"]
-            })
-        
-        return {
-            "forecast_hours": hours,
-            "current_score": current.get("energy_score", {}).get("current", 50.0),
-            "forecast": forecast_points,
-            "note": "此预测基于历史趋势和星象因素，仅供参考"
-        }
-    
-    def check_mission_triggers(
-        self,
-        db: Session,
-        weather_data: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """
-        检查是否需要触发能量任务
-        
-        Args:
-            db: 数据库会话
-            weather_data: 天气数据
-            
-        Returns:
-            触发的任务列表
-        """
-        triggered = []
-        
-        energy_score = weather_data.get("energy_score", {}).get("current", 50.0)
-        mood_type = weather_data.get("mood", {}).get("type", "balanced")
-        low_dimensions = weather_data.get("low_dimensions", [])
-        aspect_stats = weather_data.get("aspect_stats", {})
-        
-        challenging_count = aspect_stats.get("challenging", 0)
-        total_aspects = aspect_stats.get("total", 1)
-        challenging_ratio = challenging_count / total_aspects if total_aspects > 0 else 0
-        
-        if challenging_ratio > 0.4 or energy_score < 40:
-            mission = self._create_meditation_mission(db, weather_data)
-            if mission:
-                triggered.append(mission)
-        
-        if mood_type == "challenging" or energy_score < 30:
-            mission = self._create_group_meditation_mission(db, weather_data)
-            if mission:
-                triggered.append(mission)
-        
-        for dim in low_dimensions:
-            dim_type = dim.get("dimension")
-            if dim_type == "emotion" and dim.get("score", 50) < 30:
-                mission = self._create_emotion_support_mission(db, weather_data)
-                if mission:
-                    triggered.append(mission)
-            elif dim_type == "social" and dim.get("score", 50) < 30:
-                mission = self._create_social_connect_mission(db, weather_data)
-                if mission:
-                    triggered.append(mission)
-        
-        return triggered
-    
-    def _create_meditation_mission(
-        self,
-        db: Session,
-        weather_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """创建冥想任务"""
-        now = datetime.utcnow()
-        
-        existing = db.query(EnergyMission).filter(
-            and_(
-                EnergyMission.mission_type == "silent_meditation",
-                EnergyMission.status == "active",
-                EnergyMission.start_at >= now - timedelta(hours=1)
-            )
-        ).first()
-        
-        if existing:
-            return None
-        
-        mission = EnergyMission(
-            mission_type="silent_meditation",
-            title="静音冥想打卡",
-            description="当前社区能量较为紧张，让我们一起通过冥想来平复情绪。安静地坐下来，专注于呼吸，感受内心的平静。",
-            trigger_condition="challenging_aspects_high",
-            target_dimension="emotion",
-            difficulty="easy",
-            base_reward=10,
-            max_participants=100,
-            start_at=now,
-            end_at=now + timedelta(minutes=30),
-            duration_minutes=30,
-            status="active",
-            participant_count=0,
-            energy_contributed=0.0,
-            created_at=now,
-            updated_at=now
-        )
-        
-        db.add(mission)
-        db.commit()
-        db.refresh(mission)
-        
-        return {
-            "id": mission.id,
-            "type": mission.mission_type,
-            "title": mission.title,
-            "description": mission.description,
-            "start_at": mission.start_at.isoformat() if mission.start_at else None,
-            "end_at": mission.end_at.isoformat() if mission.end_at else None,
-            "reward": mission.base_reward
-        }
-    
-    def _create_group_meditation_mission(
-        self,
-        db: Session,
-        weather_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """创建集体共修任务"""
-        now = datetime.utcnow()
-        
-        existing = db.query(EnergyMission).filter(
-            and_(
-                EnergyMission.mission_type == "group_meditation",
-                EnergyMission.status == "active",
-                EnergyMission.start_at >= now - timedelta(hours=2)
-            )
-        ).first()
-        
-        if existing:
-            return None
-        
-        mission = EnergyMission(
-            mission_type="group_meditation",
-            title="集体共修",
-            description="社区能量处于低谷，让我们一起进行集体共修。想象金色的光芒从宇宙注入社区，每个人都分享爱与和平的能量。",
-            trigger_condition="low_energy_community",
-            target_dimension="emotion",
-            difficulty="medium",
-            base_reward=25,
-            max_participants=200,
-            start_at=now,
-            end_at=now + timedelta(minutes=45),
-            duration_minutes=45,
-            status="active",
-            participant_count=0,
-            energy_contributed=0.0,
-            created_at=now,
-            updated_at=now
-        )
-        
-        db.add(mission)
-        db.commit()
-        db.refresh(mission)
-        
-        return {
-            "id": mission.id,
-            "type": mission.mission_type,
-            "title": mission.title,
-            "description": mission.description,
-            "start_at": mission.start_at.isoformat() if mission.start_at else None,
-            "end_at": mission.end_at.isoformat() if mission.end_at else None,
-            "reward": mission.base_reward
-        }
-    
-    def _create_emotion_support_mission(
-        self,
-        db: Session,
-        weather_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """创建情绪支持任务"""
-        now = datetime.utcnow()
-        
-        existing = db.query(EnergyMission).filter(
-            and_(
-                EnergyMission.mission_type == "emotion_support",
-                EnergyMission.status == "active",
-                EnergyMission.start_at >= now - timedelta(hours=3)
-            )
-        ).first()
-        
-        if existing:
-            return None
-        
-        mission = EnergyMission(
-            mission_type="emotion_support",
-            title="情绪能量共振",
-            description="社区情绪维度能量较低，让我们一起进行情绪能量共振。回想一次让你感到温暖的经历，将这份温暖发送给社区中的每个人。",
-            trigger_condition="low_emotion_energy",
-            target_dimension="emotion",
-            difficulty="medium",
-            base_reward=20,
-            max_participants=150,
-            start_at=now,
-            end_at=now + timedelta(minutes=40),
-            duration_minutes=40,
-            status="active",
-            participant_count=0,
-            energy_contributed=0.0,
-            created_at=now,
-            updated_at=now
-        )
-        
-        db.add(mission)
-        db.commit()
-        db.refresh(mission)
-        
-        return {
-            "id": mission.id,
-            "type": mission.mission_type,
-            "title": mission.title,
-            "description": mission.description,
-            "start_at": mission.start_at.isoformat() if mission.start_at else None,
-            "end_at": mission.end_at.isoformat() if mission.end_at else None,
-            "reward": mission.base_reward
-        }
-    
-    def _create_social_connect_mission(
-        self,
-        db: Session,
-        weather_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """创建社交连接任务"""
-        now = datetime.utcnow()
-        
-        existing = db.query(EnergyMission).filter(
-            and_(
-                EnergyMission.mission_type == "social_connect",
-                EnergyMission.status == "active",
-                EnergyMission.start_at >= now - timedelta(hours=3)
-            )
-        ).first()
-        
-        if existing:
-            return None
-        
-        mission = EnergyMission(
-            mission_type="social_connect",
-            title="微笑连接任务",
-            description="社区社交维度能量较低，让我们一起进行微笑连接。在心中向社区中的每个人发送一个温暖的微笑，想象彼此之间建立起金色的连接。",
-            trigger_condition="low_social_energy",
-            target_dimension="social",
-            difficulty="easy",
-            base_reward=15,
-            max_participants=200,
-            start_at=now,
-            end_at=now + timedelta(minutes=30),
-            duration_minutes=30,
-            status="active",
-            participant_count=0,
-            energy_contributed=0.0,
-            created_at=now,
-            updated_at=now
-        )
-        
-        db.add(mission)
-        db.commit()
-        db.refresh(mission)
-        
-        return {
-            "id": mission.id,
-            "type": mission.mission_type,
-            "title": mission.title,
-            "description": mission.description,
-            "start_at": mission.start_at.isoformat() if mission.start_at else None,
-            "end_at": mission.end_at.isoformat() if mission.end_at else None,
-            "reward": mission.base_reward
-        }
-    
-    def _get_active_contributions(
-        self,
-        db: Session,
-        scope: str,
-        city: Optional[str]
-    ) -> List[Dict[str, Any]]:
-        """获取活跃的能量贡献"""
-        now = datetime.utcnow()
-        
-        query = db.query(EnergyContribution).filter(
-            and_(
-                EnergyContribution.is_active == True,
-                EnergyContribution.expires_at > now
-            )
-        )
-        
-        if scope == "local" and city:
-            pass
-        
-        contributions = query.order_by(EnergyContribution.created_at.desc()).all()
-        
-        result = []
-        for contrib in contributions:
-            contrib_type = ENERGY_CONTRIBUTION_TYPES.get(contrib.contribution_type, {})
-            
-            result.append({
-                "id": contrib.id,
-                "type": contrib.contribution_type,
-                "planet": contrib.planet_name,
-                "planet_icon": contrib_type.get("icon", "✨"),
-                "name": contrib_type.get("name", "未知贡献"),
-                "description": contrib_type.get("description", ""),
-                "color": contrib_type.get("color", "#9370db"),
-                "energy_amount": contrib.energy_amount,
-                "target_dimension": contrib.target_dimension,
-                "created_at": contrib.created_at.isoformat() if contrib.created_at else None,
-                "expires_at": contrib.expires_at.isoformat() if contrib.expires_at else None
-            })
-        
-        return result
-    
-    def _score_to_weather(self, score: float) -> str:
-        """将分数转换为天气类型"""
-        if score >= 80:
-            return "sunny"
-        elif score >= 65:
-            return "cloudy"
-        elif score >= 50:
-            return "partly_cloudy"
-        elif score >= 30:
-            return "overcast"
-        elif score >= 15:
-            return "rainy"
-        else:
-            return "stormy"
-    
-    def _generate_broadcast(
-        self,
-        weather_info: Dict[str, Any],
-        mood_info: Dict[str, Any],
-        score: float,
-        high_dimensions: List[Dict[str, Any]],
-        low_dimensions: List[Dict[str, Any]],
-        dominant_planets: List[Dict[str, Any]]
-    ) -> str:
-        """生成能量天气播报文本"""
-        broadcast_parts = []
-        
-        broadcast_parts.append(f"【今日能量天气】{weather_info['icon']} {weather_info['label']}")
-        broadcast_parts.append(f"当前社区能量指数: {round(score, 1)} / 100")
-        broadcast_parts.append(f"整体情绪状态: {mood_info['icon']} {mood_info['label']}")
-        
-        if dominant_planets:
-            top_planet = dominant_planets[0]
-            broadcast_parts.append(f"🌟 主导行星: {top_planet['planet']} 在 {top_planet['dominant_sign']} ({top_planet['percentage']}%)")
-        
-        if high_dimensions:
-            dim_names = "、".join([d.get("name_cn", "") for d in high_dimensions[:3]])
-            broadcast_parts.append(f"✨ 能量旺盛维度: {dim_names}")
-        
-        if low_dimensions:
-            dim_names = "、".join([d.get("name_cn", "") for d in low_dimensions[:3]])
-            broadcast_parts.append(f"⚠️ 能量较低维度: {dim_names}")
-        
-        broadcast_parts.append(f"💡 建议: {weather_info['description']}")
-        
-        return "\n".join(broadcast_parts)
+            for key, config in ENERGY_CONTRIBUTION_TYPES.items()
+        ]
 
 
 energy_weather_service = EnergyWeatherService()
 
 
 def get_energy_weather_service() -> EnergyWeatherService:
-    """获取能量天气服务单例"""
+    """获取能量气象站服务单例"""
     return energy_weather_service

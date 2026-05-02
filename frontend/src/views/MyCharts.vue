@@ -8,6 +8,22 @@
       <p class="page-desc">查看和管理您的历史星盘记录</p>
     </div>
 
+    <div class="feature-entrances">
+      <div class="quest-entrance network-chain-entrance">
+        <div class="entrance-content">
+          <div class="entrance-icon">🌐</div>
+          <div class="entrance-info">
+            <h5>星盘人脉链</h5>
+            <p>探索你的情绪价值人脉，发现与你能量共鸣的人</p>
+          </div>
+          <button class="entrance-btn network-chain-btn" @click="goToNetworkChain">
+            发现人脉
+            <span class="arrow">→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="charts-container" v-loading="loading">
       <template v-if="charts.length > 0">
         <div class="charts-grid">
@@ -308,11 +324,15 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { chartApi, reportApi } from '@/api'
+import { useUserStore } from '@/stores/user'
 import ChartWheel from '@/components/ChartWheel.vue'
 import { downloadBlob, generateChartFilename } from '@/utils/exportUtils'
 import { Download } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const userStore = useUserStore()
+
+const isLoggedIn = computed(() => userStore.isLoggedIn || !!localStorage.getItem('token'))
 
 const loading = ref(false)
 const charts = ref([])
@@ -514,6 +534,15 @@ function toggleExportMenu() {
 
 function goToAstro() {
   router.push('/astro')
+}
+
+function goToNetworkChain() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再查看星盘人脉链')
+    router.push({ path: '/login', query: { redirect: '/network-chain' } })
+    return
+  }
+  router.push('/network-chain')
 }
 
 onMounted(() => {
@@ -917,5 +946,104 @@ onMounted(() => {
 
 :deep(.edit-form .el-input__inner::placeholder) {
   color: rgba(255, 255, 255, 0.3);
+}
+
+.feature-entrances {
+  margin-bottom: 24px;
+}
+
+.quest-entrance {
+  margin-top: 8px;
+}
+
+.entrance-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  transition: all 0.3s ease;
+}
+
+.entrance-content:hover {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.2) 100%);
+}
+
+.entrance-icon {
+  font-size: 1.8rem;
+}
+
+.entrance-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entrance-info h5 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.entrance-info p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.entrance-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.entrance-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.entrance-btn:active {
+  transform: translateY(0);
+}
+
+.arrow {
+  font-size: 0.9rem;
+  transition: transform 0.3s ease;
+}
+
+.entrance-btn:hover .arrow {
+  transform: translateX(2px);
+}
+
+.network-chain-entrance .entrance-content {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.network-chain-entrance .entrance-content:hover {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(16, 185, 129, 0.2) 100%);
+}
+
+.network-chain-btn {
+  background: linear-gradient(135deg, #22c55e 0%, #10b981 100%);
+}
+
+.network-chain-btn:hover {
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
 }
 </style>

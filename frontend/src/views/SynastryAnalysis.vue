@@ -126,6 +126,10 @@
               <span>重新分析</span>
             </el-button>
             <div class="result-actions-right">
+              <el-button v-if="isLoggedIn && savedRecordId" type="success" @click="startPrivateChat" class="chat-btn">
+                <el-icon><ChatDotRound /></el-icon>
+                <span>开始私聊</span>
+              </el-button>
               <el-button v-if="isLoggedIn" @click="saveRecord" :loading="saving" class="save-btn">
                 <el-icon><Plus /></el-icon>
                 <span>{{ saving ? '保存中...' : '保存报告' }}</span>
@@ -503,12 +507,14 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Connection, Plus, FolderOpened, MagicStick, Document,
   ArrowLeft, Share, Link, Check, Warning, Star,
-  Tools, InfoFilled, Loading
+  Tools, InfoFilled, Loading, ChatDotRound
 } from '@element-plus/icons-vue'
 import { CITIES_DB, QUICK_CITIES } from '@/constants/chart'
 import SynastryPersonForm from '@/components/synastry/SynastryPersonForm.vue'
 import RadarChart from '@/components/synastry/RadarChart.vue'
 import { useSynastryAnalysis, getStarStyle } from '@/composables'
+import { privateChatApi } from '@/api'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
@@ -588,6 +594,68 @@ watch(isLoggedIn, (newVal) => {
     loadMyCharts()
   }
 })
+
+async function startPrivateChat() {
+  console.log('[SynastryAnalysis] startPrivateChat 被调用，route.query:', route.query)
+  
+  const targetUserIdParam = route.query.target_user_id
+  const compatibilityScore = route.query.compatibility_score ? parseInt(route.query.compatibility_score) : totalScore.value
+  const matchType = route.query.match_type
+  const matchSource = route.query.match_source || 'synastry'
+  
+  if (!targetUserIdParam) {
+    console.log('[SynastryAnalysis] 没有 target_user_id 参数')
+    ElMessage.info('请从人脉链或相位连连看页面发起私聊')
+    router.push('/network-chain')
+    return
+  }
+  
+  const targetUserId = parseInt(targetUserIdParam)
+  
+  if (isNaN(targetUserId) || targetUserId <= 0) {
+    console.error('[SynastryAnalysis] 无效的 target_user_id:', targetUserIdParam)
+    ElMessage.warning('无效的用户信息')
+    return
+  }
+  
+  console.log(`[SynastryAnalysis] 准备创建聊天，目标用户ID: ${targetUserId}`)
+  
+  try {
+    ElMessage.info('正在打开聊天...')
+    
+    const result = await privateChatApi.startChat({
+      target_user_id: targetUserId,
+      match_source: matchSource,
+      compatibility_score: compatibilityScore,
+      match_type: matchType
+    })
+    
+    console.log('[SynastryAnalysis] startChat 返回结果:', result)
+    
+    ElMessage.success('正在打开聊天...')
+    router.push({
+      path: '/private-chat',
+      query: {
+        target_user_id: targetUserId,
+        compatibility_score: compatibilityScore,
+        match_type: matchType,
+        match_source: matchSource
+      }
+    })
+  } catch (error) {
+    console.error('[SynastryAnalysis] 创建聊天失败:', error)
+    ElMessage.info('正在打开聊天页面...')
+    router.push({
+      path: '/private-chat',
+      query: {
+        target_user_id: targetUserId,
+        compatibility_score: compatibilityScore,
+        match_type: matchType,
+        match_source: matchSource
+      }
+    })
+  }
+}
 
 onMounted(async () => {
   if (route.params.id) {

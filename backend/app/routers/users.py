@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -78,6 +78,41 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="用户已被禁用")
     return current_user
+
+
+def get_current_user_optional(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    可选的用户获取函数，用于不需要强制登录的接口
+    如果用户已登录则返回用户对象，否则返回 None
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+    
+    if not auth_header.startswith("Bearer "):
+        return None
+    
+    token = auth_header[7:]
+    if not token:
+        return None
+    
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id_raw = payload.get("sub")
+        if user_id_raw is None:
+            return None
+        try:
+            user_id = int(user_id_raw)
+        except (ValueError, TypeError):
+            return None
+    except JWTError:
+        return None
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    return user
 
 
 @router.post("/register", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)

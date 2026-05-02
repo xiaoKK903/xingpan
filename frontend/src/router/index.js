@@ -52,6 +52,30 @@ const routes = [
         meta: { title: '星象气象站' }
       },
       {
+        path: 'star-resonance',
+        name: 'StarResonancePool',
+        component: () => import('@/views/StarResonancePool.vue'),
+        meta: { title: '星能共鸣池' }
+      },
+      {
+        path: 'prediction',
+        name: 'PredictionHall',
+        component: () => import('@/views/PredictionHall.vue'),
+        meta: { title: '预言家礼堂' }
+      },
+      {
+        path: 'prediction/detail/:id',
+        name: 'PredictionDetail',
+        component: () => import('@/views/PredictionDetail.vue'),
+        meta: { title: '投票详情' }
+      },
+      {
+        path: 'prediction/result/:id',
+        name: 'PredictionResult',
+        component: () => import('@/views/PredictionResult.vue'),
+        meta: { title: '结果公示' }
+      },
+      {
         path: 'login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),
@@ -99,29 +123,60 @@ const routes = [
         component: () => import('@/views/AstrologerWorkbench.vue'),
         meta: { title: '占星师 AI 助手工作台' }
       },
+
       {
-        path: 'energy-community',
-        name: 'EnergyWeather',
-        component: () => import('@/views/EnergyWeather.vue'),
-        meta: { title: '能量天气共同体' }
+        path: 'plaza',
+        name: 'ParallelPlaza',
+        component: () => import('@/views/ParallelPlaza.vue'),
+        meta: { title: '平行人生广场' }
       },
       {
-        path: 'energy-community/missions',
-        name: 'EnergyMissions',
-        component: () => import('@/views/EnergyMissions.vue'),
-        meta: { title: '能量任务中心' }
+        path: 'boss-hall',
+        name: 'BossBattleHall',
+        component: () => import('@/views/BossBattleHall.vue'),
+        meta: { title: '星象BOSS副本大厅' }
       },
       {
-        path: 'energy-community/contribute',
-        name: 'EnergyContribute',
-        component: () => import('@/views/EnergyContribute.vue'),
-        meta: { title: '能量注入中心' }
+        path: 'element-quest',
+        name: 'ElementQuest',
+        component: () => import('@/views/ElementQuest.vue'),
+        meta: { title: '元素缺角寻宝', requiresAuth: true }
       },
       {
-        path: 'energy-community/predictions',
-        name: 'EnergyPredictions',
-        component: () => import('@/views/EnergyPredictions.vue'),
-        meta: { title: '预测竞技场' }
+        path: 'phase-connect',
+        name: 'PhaseConnect',
+        component: () => import('@/views/PhaseConnect.vue'),
+        meta: { title: '相位连连看', requiresAuth: true }
+      },
+      {
+        path: 'network-chain',
+        name: 'NetworkChain',
+        component: () => import('@/views/NetworkChain.vue'),
+        meta: { title: '星盘人脉链', requiresAuth: true }
+      },
+      {
+        path: 'private-chat',
+        name: 'PrivateChat',
+        component: () => import('@/views/PrivateChat.vue'),
+        meta: { title: '私聊消息', requiresAuth: true }
+      },
+      {
+        path: 'vip-center',
+        name: 'VIPCenter',
+        component: () => import('@/views/VIPCenter.vue'),
+        meta: { title: '星钻会员中心', requiresAuth: true }
+      },
+      {
+        path: 'gift-shop',
+        name: 'GiftShop',
+        component: () => import('@/views/GiftShop.vue'),
+        meta: { title: '礼物商城', requiresAuth: true }
+      },
+      {
+        path: 'report-shop',
+        name: 'ReportShop',
+        component: () => import('@/views/ReportShop.vue'),
+        meta: { title: '星盘报告商城', requiresAuth: true }
       }
     ]
   },
