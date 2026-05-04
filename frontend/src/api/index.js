@@ -96,8 +96,26 @@ request.interceptors.response.use(
         case 500:
           ElMessage.error('服务器错误')
           break
+        case 422:
+          const detail422 = error.response.data?.detail
+          let errorMessage = '参数校验失败'
+          if (Array.isArray(detail422) && detail422.length > 0) {
+            const firstError = detail422[0]
+            errorMessage = firstError.msg || firstError.message || '参数校验失败'
+          } else if (typeof detail422 === 'string') {
+            errorMessage = detail422
+          }
+          ElMessage.error(errorMessage)
+          break
         default:
-          ElMessage.error(error.response.data?.detail || error.message || '请求失败')
+          let defaultMessage = error.message || '请求失败'
+          const defaultDetail = error.response.data?.detail
+          if (typeof defaultDetail === 'string') {
+            defaultMessage = defaultDetail
+          } else if (Array.isArray(defaultDetail) && defaultDetail.length > 0 && typeof defaultDetail[0] === 'object') {
+            defaultMessage = defaultDetail[0].msg || defaultDetail[0].message || '参数校验失败'
+          }
+          ElMessage.error(defaultMessage)
       }
     } else {
       ElMessage.error('网络错误，请检查网络连接')
@@ -114,12 +132,16 @@ export const userApi = {
     return request.post('/users/login', formData)
   },
   
-  register(username, password, email) {
-    return request.post('/users/register', {
+  register(username, password, email, inviteCode = null) {
+    const data = {
       username,
       password,
       email
-    })
+    }
+    if (inviteCode) {
+      data.invite_code = inviteCode
+    }
+    return request.post('/users/register', data)
   },
   
   getCurrentUser() {
@@ -1001,6 +1023,535 @@ export const checkinApi = {
   
   initRewards() {
     return request.post('/checkin/init-rewards')
+  }
+}
+
+export const inviteApi = {
+  getCode() {
+    return request.get('/invite/code')
+  },
+  
+  getStats() {
+    return request.get('/invite/stats')
+  },
+  
+  getRewards(limit = 20, offset = 0) {
+    return request.get('/invite/rewards', { params: { limit, offset } })
+  },
+  
+  recordShare(shareType = 'link', sharePlatform = null) {
+    const params = { share_type: shareType }
+    if (sharePlatform) {
+      params.share_platform = sharePlatform
+    }
+    return request.post('/invite/share', null, { params })
+  },
+  
+  recordSynastryShare(synastryRecordId, sharePlatform = null) {
+    const params = { synastry_record_id: synastryRecordId }
+    if (sharePlatform) {
+      params.share_platform = sharePlatform
+    }
+    return request.post('/invite/synastry-share', null, { params })
+  },
+  
+  validateCode(inviteCode) {
+    return request.get('/invite/validate-code', { params: { invite_code: inviteCode } })
+  },
+  
+  getMyInvitees(page = 1, pageSize = 20) {
+    return request.get('/invite/my-invitees', { params: { page, page_size: pageSize } })
+  },
+  
+  getRules() {
+    return request.get('/invite/rules')
+  }
+}
+
+export const activityApi = {
+  getHallActivities() {
+    return request.get('/activity/hall')
+  },
+  
+  getActiveBenefits(moduleType = null) {
+    const params = {}
+    if (moduleType) params.module_type = moduleType
+    return request.get('/activity/benefits/active', { params })
+  },
+  
+  calculateBenefits(moduleType, userZodiacSign = null) {
+    const params = { module_type: moduleType }
+    if (userZodiacSign) params.user_zodiac_sign = userZodiacSign
+    return request.get('/activity/benefits/calculate', { params })
+  },
+  
+  getList(statusFilter = null, activityType = null, includeArchived = false) {
+    const params = { include_archived: includeArchived }
+    if (statusFilter) params.status_filter = statusFilter
+    if (activityType) params.activity_type = activityType
+    return request.get('/activity/list', { params })
+  },
+  
+  getDetail(activityId) {
+    return request.get(`/activity/${activityId}`)
+  },
+  
+  create(data) {
+    return request.post('/activity/create', data)
+  },
+  
+  update(activityId, data) {
+    return request.put(`/activity/${activityId}`, data)
+  },
+  
+  updateStatus(activityId, newStatus) {
+    return request.patch(`/activity/${activityId}/status`, null, { 
+      params: { new_status: newStatus } 
+    })
+  },
+  
+  delete(activityId) {
+    return request.delete(`/activity/${activityId}`)
+  },
+  
+  syncStatuses() {
+    return request.post('/activity/sync-statuses')
+  },
+  
+  getMyParticipations(activityId = null) {
+    const params = {}
+    if (activityId) params.activity_id = activityId
+    return request.get('/activity/participations/my', { params })
+  }
+}
+
+export const growthTasksApi = {
+  getMyTasks() {
+    return request.get('/growth-tasks/tasks')
+  },
+  
+  getPopupStatus() {
+    return request.get('/growth-tasks/popup-status')
+  },
+  
+  markPopupSeen(isDismissed = false) {
+    return request.post('/growth-tasks/popup-mark-seen', null, { 
+      params: { is_dismissed: isDismissed } 
+    })
+  },
+  
+  claimReward(taskId) {
+    return request.post(`/growth-tasks/claim-reward/${taskId}`)
+  },
+  
+  triggerTask(taskType, data = {}) {
+    return request.post('/growth-tasks/trigger-task', null, { 
+      params: { task_type: taskType, ...data } 
+    })
+  }
+}
+
+export const leaderboardApi = {
+  getConfigs() {
+    return request.get('/leaderboards/configs')
+  },
+  
+  getBoard(boardKey, cycleKey = null, limit = 20) {
+    const params = { limit }
+    if (cycleKey) params.cycle_key = cycleKey
+    return request.get(`/leaderboards/board/${boardKey}`, { params })
+  },
+  
+  getMyRank(boardKey, cycleKey = null) {
+    const params = {}
+    if (cycleKey) params.cycle_key = cycleKey
+    return request.get(`/leaderboards/my-rank/${boardKey}`, { params })
+  },
+  
+  getMyBadges(includeExpired = false) {
+    return request.get('/leaderboards/my-badges', { params: { include_expired: includeExpired } })
+  },
+  
+  getMyTitles(includeExpired = false) {
+    return request.get('/leaderboards/my-titles', { params: { include_expired: includeExpired } })
+  }
+}
+
+export const adFreeApi = {
+  getPlans() {
+    return request.get('/ad-free/plans')
+  },
+  
+  getMyStatus() {
+    return request.get('/ad-free/my-status')
+  },
+  
+  getMySubscriptions(includeExpired = false) {
+    return request.get('/ad-free/my-subscriptions', { params: { include_expired: includeExpired } })
+  },
+  
+  subscribe(planKey) {
+    return request.post('/ad-free/subscribe', null, { params: { plan_key: planKey } })
+  }
+}
+
+export const dailyCPMatchApi = {
+  getStatus() {
+    return request.get('/daily-cp-match/status')
+  },
+  
+  getMyMatches(page = 1, pageSize = 10) {
+    return request.get('/daily-cp-match/my-matches', { params: { page, page_size: pageSize } })
+  },
+  
+  getMatch(matchId) {
+    return request.get(`/daily-cp-match/match/${matchId}`)
+  },
+  
+  acceptMatch(matchId) {
+    return request.post('/daily-cp-match/accept', { match_id: matchId })
+  },
+  
+  rejectMatch(matchId) {
+    return request.post('/daily-cp-match/reject', { match_id: matchId })
+  },
+  
+  unlockProfile(matchId, targetUserId) {
+    return request.post('/daily-cp-match/unlock-profile', {
+      match_id: matchId,
+      target_user_id: targetUserId
+    })
+  },
+  
+  extendSession(sessionId, extensionHours = 168) {
+    return request.post('/daily-cp-match/extend-session', {
+      session_id: sessionId,
+      extension_hours: extensionHours
+    })
+  },
+  
+  manualMatch(matchType = 'vip_extra', targetZodiacSign = null) {
+    const data = { match_type: matchType }
+    if (targetZodiacSign) {
+      data.target_zodiac_sign = targetZodiacSign
+    }
+    return request.post('/daily-cp-match/manual-match', data)
+  },
+  
+  getPreference() {
+    return request.get('/daily-cp-match/preference')
+  },
+  
+  updatePreference(data) {
+    return request.put('/daily-cp-match/preference', data)
+  },
+  
+  getSession(sessionId) {
+    return request.get(`/daily-cp-match/session/${sessionId}`)
+  },
+  
+  getVipPrivileges() {
+    return request.get('/daily-cp-match/vip-privileges')
+  }
+}
+
+export const timeCapsuleApi = {
+  initData() {
+    return request.post('/time-capsules/init-data')
+  },
+  
+  getSkins() {
+    return request.get('/time-capsules/skins')
+  },
+  
+  getQuota() {
+    return request.get('/time-capsules/quota')
+  },
+  
+  create(data) {
+    return request.post('/time-capsules', data)
+  },
+  
+  getList(params = {}) {
+    return request.get('/time-capsules', { params })
+  },
+  
+  getReceived(params = {}) {
+    return request.get('/time-capsules/received', { params })
+  },
+  
+  getDetail(capsuleId) {
+    return request.get(`/time-capsules/${capsuleId}`)
+  },
+  
+  update(capsuleId, data) {
+    return request.put(`/time-capsules/${capsuleId}`, data)
+  },
+  
+  delete(capsuleId) {
+    return request.delete(`/time-capsules/${capsuleId}`)
+  },
+  
+  open(capsuleId) {
+    return request.post(`/time-capsules/${capsuleId}/open`)
+  },
+  
+  getNotifications(params = {}) {
+    return request.get('/time-capsules/notifications', { params })
+  },
+  
+  markNotificationRead(notificationId) {
+    return request.post(`/time-capsules/notifications/${notificationId}/read`)
+  },
+  
+  processExpired() {
+    return request.post('/time-capsules/process-expired')
+  },
+  
+  getStats() {
+    return request.get('/time-capsules/stats')
+  }
+}
+
+export const pastLifeApi = {
+  analyzeTheme(data) {
+    return request.post('/past-life/analyze', data)
+  },
+  
+  generateStory(data) {
+    return request.post('/past-life/generate', data, {
+      timeout: 120000
+    })
+  },
+  
+  generateDeepStory(data) {
+    return request.post('/past-life/generate-deep', data, {
+      timeout: 180000
+    })
+  },
+  
+  analyzeSynastry(data) {
+    return request.post('/past-life/synastry/analyze', data)
+  },
+  
+  generateSynastryStory(data) {
+    return request.post('/past-life/synastry/generate', data, {
+      timeout: 120000
+    })
+  },
+  
+  getMyRecords(params = {}) {
+    return request.get('/past-life/my-records', { params })
+  },
+  
+  getMySynastryRecords(params = {}) {
+    return request.get('/past-life/my-synastry-records', { params })
+  },
+  
+  getSingleRecordDetail(recordId) {
+    return request.get(`/past-life/detail/${recordId}`)
+  },
+  
+  getSynastryRecordDetail(recordId) {
+    return request.get(`/past-life/synastry/detail/${recordId}`)
+  },
+  
+  getThemes() {
+    return request.get('/past-life/themes')
+  },
+  
+  getRelationshipTypes() {
+    return request.get('/past-life/relationship-types')
+  },
+  
+  getSharedByCode(shareCode) {
+    return request.get(`/past-life/share/${shareCode}`)
+  },
+  
+  createOrder(data) {
+    return request.post('/past-life/order/create', data)
+  },
+  
+  getOrderStatus(orderNo) {
+    return request.get(`/past-life/order/status/${orderNo}`)
+  },
+  
+  upgradeWithOrder(data) {
+    return request.post('/past-life/order/upgrade', data)
+  }
+}
+
+export const socialPlazaApi = {
+  getPostTypes() {
+    return request.get('/social-plaza/types')
+  },
+  
+  getPosts(params = {}) {
+    return request.get('/social-plaza/posts', { params })
+  },
+  
+  getPostDetail(postId) {
+    return request.get(`/social-plaza/posts/${postId}`)
+  },
+  
+  createPost(data) {
+    return request.post('/social-plaza/posts', data)
+  },
+  
+  deletePost(postId) {
+    return request.delete(`/social-plaza/posts/${postId}`)
+  },
+  
+  likePost(postId) {
+    return request.post(`/social-plaza/posts/${postId}/like`)
+  },
+  
+  getPostLikes(postId, params = {}) {
+    return request.get(`/social-plaza/posts/${postId}/likes`, { params })
+  },
+  
+  sendFlower(postId, data) {
+    return request.post(`/social-plaza/posts/${postId}/flower`, data)
+  },
+  
+  getPostFlowers(postId, params = {}) {
+    return request.get(`/social-plaza/posts/${postId}/flowers`, { params })
+  },
+  
+  createMention(postId, data) {
+    return request.post(`/social-plaza/posts/${postId}/mention`, data)
+  },
+  
+  getPostMentions(postId, params = {}) {
+    return request.get(`/social-plaza/posts/${postId}/mentions`, { params })
+  },
+  
+  respondToMention(mentionId, data) {
+    return request.put(`/social-plaza/mentions/${mentionId}/respond`, data)
+  },
+  
+  reportPost(postId, data) {
+    return request.post(`/social-plaza/posts/${postId}/report`, data)
+  },
+  
+  getMyPosts(params = {}) {
+    return request.get('/social-plaza/my/posts', { params })
+  },
+  
+  recordShare(data) {
+    return request.post('/social-plaza/share', data)
+  },
+  
+  hidePostAdmin(postId, hideReason = null) {
+    const params = {}
+    if (hideReason) params.hide_reason = hideReason
+    return request.put(`/social-plaza/admin/posts/${postId}/hide`, null, { params })
+  },
+  
+  removePostAdmin(postId, hideReason = null) {
+    const params = {}
+    if (hideReason) params.hide_reason = hideReason
+    return request.put(`/social-plaza/admin/posts/${postId}/remove`, null, { params })
+  }
+}
+
+export const topicChallengeApi = {
+  getActiveTopic() {
+    return request.get('/topic-challenge/active')
+  },
+  
+  getTopicList(params = {}) {
+    return request.get('/topic-challenge/list', { params })
+  },
+  
+  getTopicDetail(topicId) {
+    return request.get(`/topic-challenge/${topicId}`)
+  },
+  
+  getTopicByTag(topicTag) {
+    return request.get(`/topic-challenge/tag/${encodeURIComponent(topicTag)}`)
+  },
+  
+  getTopicPosts(topicId, params = {}) {
+    return request.get(`/topic-challenge/${topicId}/posts`, { params })
+  },
+  
+  getTopicLeaderboard(topicId, params = {}) {
+    return request.get(`/topic-challenge/${topicId}/leaderboard`, { params })
+  },
+  
+  participateTopic(topicId, postId) {
+    return request.post(`/topic-challenge/${topicId}/participate`, { post_id: postId })
+  },
+  
+  claimReward(topicId) {
+    return request.post(`/topic-challenge/${topicId}/claim-reward`)
+  },
+  
+  createTopic(data) {
+    return request.post('/topic-challenge/', data)
+  },
+  
+  updateTopic(topicId, data) {
+    return request.put(`/topic-challenge/${topicId}`, data)
+  },
+  
+  settleRewards(topicId) {
+    return request.post(`/topic-challenge/${topicId}/settle`)
+  }
+}
+
+export const storyCardApi = {
+  generate(data) {
+    return request.post('/story-card/generate', data)
+  },
+  
+  save(data) {
+    return request.post('/story-card/save', data)
+  },
+  
+  toggleMount(storyCardId, mounted = true) {
+    return request.post('/story-card/mount', { story_card_id: storyCardId, mounted })
+  },
+  
+  getMyCards(params = {}) {
+    return request.get('/story-card/my-cards', { params })
+  },
+  
+  getMyStoryWall() {
+    return request.get('/story-card/story-wall')
+  },
+  
+  getUserStoryWall(userId) {
+    return request.get(`/story-card/story-wall/${userId}`)
+  },
+  
+  getDetail(storyCardId) {
+    return request.get(`/story-card/${storyCardId}`)
+  },
+  
+  update(storyCardId, data) {
+    return request.put(`/story-card/${storyCardId}`, data)
+  },
+  
+  share(storyCardId) {
+    return request.post(`/story-card/${storyCardId}/share`)
+  },
+  
+  getByShareCode(shareCode) {
+    return request.get(`/story-card/share/${shareCode}`)
+  },
+  
+  delete(storyCardId) {
+    return request.delete(`/story-card/${storyCardId}`)
+  },
+  
+  getTemplates() {
+    return request.get('/story-card/templates/list')
+  },
+  
+  getRarityConfig() {
+    return request.get('/story-card/rarity/config')
   }
 }
 

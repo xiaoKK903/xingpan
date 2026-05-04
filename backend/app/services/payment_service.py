@@ -182,9 +182,56 @@ def process_payment_success(
     order: PaymentOrder
 ) -> Tuple[bool, str]:
     if order.payment_type == PaymentType.VIP_SUBSCRIPTION.value:
-        return process_vip_subscription_payment(db, order)
+        success, message = process_vip_subscription_payment(db, order)
+        if not success:
+            return False, message
+    
+    process_invite_first_payment_reward(db, order)
     
     return True, "支付成功"
+
+
+def process_invite_first_payment_reward(
+    db: Session,
+    order: PaymentOrder
+):
+    try:
+        from app.services.invite_service import (
+            get_invite_relation_by_invitee,
+            process_first_payment_reward
+        )
+        
+        paid_orders = db.query(PaymentOrder).filter(
+            PaymentOrder.user_id == order.user_id,
+            PaymentOrder.status == PaymentStatus.PAID.value,
+            PaymentOrder.id != order.id
+        ).count()
+        
+        if paid_orders > 0:
+            logger.info(f"用户已有付费记录，跳过首次付费返利: user_id={order.user_id}")
+            return
+        
+        invite_relation = get_invite_relation_by_invitee(db, order.user_id)
+        if not invite_relation:
+            logger.info(f"用户没有邀请关系，跳过首次付费返利: user_id={order.user_id}")
+            return
+        
+        if invite_relation.has_first_payment:
+            logger.info(f"首次付费返利已发放，跳过: user_id={order.user_id}")
+            return
+        
+        if not invite_relation.is_valid:
+            logger.info(f"邀请关系无效，跳过首次付费返利: user_id={order.user_id}, reason={invite_relation.invalid_reason}")
+            return
+        
+        success, message = process_first_payment_reward(db, invite_relation, order.final_amount)
+        if success:
+            logger.info(f"首次付费返利发放成功: user_id={order.user_id}, inviter_id={invite_relation.inviter_id}, amount={order.final_amount}")
+        else:
+            logger.warning(f"首次付费返利发放失败: {message}")
+            
+    except Exception as e:
+        logger.error(f"处理邀请首次付费返利异常: {str(e)}", exc_info=True)
 
 
 def process_vip_subscription_payment(

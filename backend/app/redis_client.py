@@ -31,7 +31,7 @@ class RedisManager:
         if self._redis is not None:
             return
         
-        if not settings.REDIS_URL:
+        if settings.REDIS_URL:
             try:
                 self._redis = redis.from_url(
                     settings.REDIS_URL,

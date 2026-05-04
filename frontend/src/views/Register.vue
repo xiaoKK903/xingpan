@@ -104,6 +104,41 @@
                 </div>
               </div>
 
+              <div class="form-group">
+                <label class="form-label">
+                  <span class="label-icon"><el-icon><Share /></el-icon></span>
+                  <span>邀请码（可选）</span>
+                </label>
+                <div class="input-wrapper invite-code-wrapper">
+                  <input 
+                    type="text"
+                    v-model="registerForm.inviteCode" 
+                    placeholder="请输入邀请码"
+                    class="astro-input invite-code-input"
+                    @blur="validateInviteCode"
+                  />
+                  <button 
+                    v-if="registerForm.inviteCode && !inviteCodeValid"
+                    type="button" 
+                    class="validate-btn"
+                    @click="validateInviteCode"
+                    :disabled="validatingCode"
+                  >
+                    <span v-if="validatingCode">验证中...</span>
+                    <span v-else>验证</span>
+                  </button>
+                  <div v-if="inviteCodeValid" class="valid-icon">
+                    <el-icon color="#22c55e"><Check /></el-icon>
+                  </div>
+                  <div class="input-border-effect"></div>
+                </div>
+                <div v-if="inviterInfo" class="inviter-info">
+                  <span class="inviter-label">邀请人：</span>
+                  <span class="inviter-name">{{ inviterInfo.username }}</span>
+                  <el-tag size="small" type="success">双方各得50星元碎片</el-tag>
+                </div>
+              </div>
+
               <div class="submit-section">
                 <button 
                   type="button" 
@@ -143,22 +178,27 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { userApi } from '@/api'
+import { userApi, inviteApi } from '@/api'
 
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
+const validatingCode = ref(false)
+const inviteCodeValid = ref(false)
+const inviterInfo = ref(null)
 
 const registerForm = reactive({
   username: '',
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  inviteCode: ''
 })
 
 function getStarStyle(index) {
@@ -170,6 +210,36 @@ function getStarStyle(index) {
     height: `${size}px`,
     animationDelay: `${Math.random() * 4}s`,
     opacity: Math.random() * 0.4 + 0.2
+  }
+}
+
+async function validateInviteCode() {
+  if (!registerForm.inviteCode) {
+    inviteCodeValid.value = false
+    inviterInfo.value = null
+    return
+  }
+  
+  validatingCode.value = true
+  try {
+    const result = await inviteApi.validateCode(registerForm.inviteCode)
+    inviteCodeValid.value = result.valid
+    if (result.valid) {
+      inviterInfo.value = result.inviter
+      ElMessage.success({
+        message: `邀请码有效，邀请人：${result.inviter?.username || '神秘星友'}`,
+        duration: 2000
+      })
+    } else {
+      inviterInfo.value = null
+      ElMessage.warning('邀请码无效或已过期')
+    }
+  } catch (error) {
+    inviteCodeValid.value = false
+    inviterInfo.value = null
+    console.error('验证邀请码失败:', error)
+  } finally {
+    validatingCode.value = false
   }
 }
 
@@ -198,7 +268,8 @@ async function handleRegister() {
     await userApi.register(
       registerForm.username,
       registerForm.password,
-      registerForm.email || undefined
+      registerForm.email || undefined,
+      registerForm.inviteCode || undefined
     )
     ElMessage.success('注册成功，请登录')
     router.push('/login')
@@ -208,6 +279,14 @@ async function handleRegister() {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  const codeFromQuery = route.query.invite_code || route.query.inviteCode
+  if (codeFromQuery) {
+    registerForm.inviteCode = codeFromQuery
+    validateInviteCode()
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -495,6 +574,72 @@ async function handleRegister() {
 
 .input-wrapper:focus-within .input-border-effect {
   width: calc(100% - 2px);
+}
+
+.invite-code-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .invite-code-input {
+    flex: 1;
+    padding-right: 80px;
+  }
+  
+  .validate-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 12px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.8) 0%, rgba(99, 102, 241, 0.8) 100%);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    }
+    
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+  
+  .valid-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+  }
+}
+
+.inviter-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 8px;
+  
+  .inviter-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.8rem;
+  }
+  
+  .inviter-name {
+    color: #22c55e;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
 }
 
 .submit-section {

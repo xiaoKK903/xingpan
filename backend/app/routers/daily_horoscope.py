@@ -8,7 +8,7 @@ import json
 from app.schemas import ApiResponse
 from app.database import get_db
 from app.models import User, Chart
-from app.routers.users import get_current_user
+from app.routers.users import get_current_user, get_current_user_optional
 
 router = APIRouter()
 
@@ -649,7 +649,7 @@ def get_daily_horoscope(
     date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD，默认今天"),
     use_personal: bool = Query(False, description="是否使用用户本命盘数据进行个性化运势"),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(lambda: None)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     try:
         if date:

@@ -1,7 +1,7 @@
-import { ref, computed, reactive, watch } from 'vue'
+import { ref, computed, reactive, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { synastryApi, chartApi } from '@/api'
+import { synastryApi, chartApi, inviteApi, storyCardApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 
 const DEFAULT_PERSON = {
@@ -26,12 +26,24 @@ export function useSynastryAnalysis() {
   const showResult = ref(false)
   const showShareDialog = ref(false)
   const copied = ref(false)
+  
+  const showStoryCardModal = ref(false)
+  const storyCardData = ref(null)
+  const generatingStoryCard = ref(false)
 
   const selectedChartA = ref(null)
   const selectedChartB = ref(null)
   const savedRecordId = ref(null)
   const shareLink = ref('')
   const myCharts = ref([])
+
+  const inviteCode = ref(null)
+  const inviteLink = ref('')
+  const inviteLinkCopied = ref(false)
+  const inviteCodeCopied = ref(false)
+  const shareSynastryLink = ref('')
+  const showRewardShareDialog = ref(false)
+  const loadingInviteCode = ref(false)
 
   const personA = reactive({ ...DEFAULT_PERSON })
   const personB = reactive({
@@ -230,6 +242,10 @@ export function useSynastryAnalysis() {
       
       ElMessage.success('分析完成')
       
+      if (isLoggedIn.value && originalSynastryData.value) {
+        await generateStoryCard()
+      }
+      
     } catch (error) {
       console.error('分析失败:', error)
       ElMessage.error(error.message || '分析失败，请稍后重试')
@@ -241,6 +257,59 @@ export function useSynastryAnalysis() {
   function goBack() {
     showResult.value = false
     savedRecordId.value = null
+    storyCardData.value = null
+    showStoryCardModal.value = false
+  }
+
+  async function generateStoryCard() {
+    if (!isLoggedIn.value) return
+    if (!originalSynastryData.value) return
+    
+    generatingStoryCard.value = true
+    
+    try {
+      const result = await storyCardApi.generate({
+        person_a_name: personA.name || '人物A',
+        person_b_name: personB.name || '人物B',
+        synastry_data: originalSynastryData.value,
+        compatibility_score: totalScore.value,
+        synastry_record_id: savedRecordId.value
+      })
+      
+      storyCardData.value = result
+      showStoryCardModal.value = true
+      
+    } catch (error) {
+      console.error('生成故事卡失败:', error)
+    } finally {
+      generatingStoryCard.value = false
+    }
+  }
+
+  function closeStoryCardModal() {
+    showStoryCardModal.value = false
+  }
+
+  function goToStoryWall() {
+    router.push('/story-wall')
+  }
+
+  async function loadInviteCode() {
+    if (!isLoggedIn.value) return
+    
+    loadingInviteCode.value = true
+    try {
+      const result = await inviteApi.getCode()
+      inviteCode.value = result
+      if (result?.invite_code) {
+        const baseUrl = window.location.origin
+        inviteLink.value = `${baseUrl}/register?invite_code=${result.invite_code}`
+      }
+    } catch (error) {
+      console.error('加载邀请码失败:', error)
+    } finally {
+      loadingInviteCode.value = false
+    }
   }
 
   async function saveRecord() {
@@ -279,6 +348,20 @@ export function useSynastryAnalysis() {
       savedRecordId.value = result?.id
       ElMessage.success('报告保存成功')
       
+      await loadInviteCode()
+      
+      if (savedRecordId.value) {
+        try {
+          const shareResult = await synastryApi.generateShare(savedRecordId.value)
+          const baseUrl = window.location.origin
+          shareSynastryLink.value = `${baseUrl}/synastry/share/${shareResult.share_code}`
+        } catch (err) {
+          console.error('生成合盘分享链接失败:', err)
+        }
+      }
+      
+      showRewardShareDialog.value = true
+      
     } catch (error) {
       console.error('保存失败:', error)
       ElMessage.error(error.message || '保存失败')
@@ -309,6 +392,78 @@ export function useSynastryAnalysis() {
       await navigator.clipboard.writeText(shareLink.value)
       copied.value = true
       ElMessage.success('链接已复制')
+      setTimeout(() => {
+        copied.value = false
+      }, 2000)
+    } catch (err) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+  }
+
+  async function copyInviteCode() {
+    if (!inviteCode.value?.invite_code) return
+    
+    try {
+      await navigator.clipboard.writeText(inviteCode.value.invite_code)
+      inviteCodeCopied.value = true
+      ElMessage.success('邀请码已复制')
+      
+      try {
+        await inviteApi.recordShare('copy_code')
+      } catch (err) {
+        console.error('记录分享失败:', err)
+      }
+      
+      setTimeout(() => {
+        inviteCodeCopied.value = false
+      }, 2000)
+    } catch (err) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink.value) return
+    
+    try {
+      await navigator.clipboard.writeText(inviteLink.value)
+      inviteLinkCopied.value = true
+      ElMessage.success('邀请链接已复制')
+      
+      try {
+        if (savedRecordId.value) {
+          await inviteApi.recordSynastryShare(savedRecordId.value, 'link')
+        } else {
+          await inviteApi.recordShare('link')
+        }
+      } catch (err) {
+        console.error('记录分享失败:', err)
+      }
+      
+      setTimeout(() => {
+        inviteLinkCopied.value = false
+      }, 2000)
+    } catch (err) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+  }
+
+  async function copySynastryShareLink() {
+    if (!shareSynastryLink.value) return
+    
+    try {
+      await navigator.clipboard.writeText(shareSynastryLink.value)
+      copied.value = true
+      ElMessage.success('合盘分享链接已复制')
+      
+      try {
+        if (savedRecordId.value) {
+          await inviteApi.recordSynastryShare(savedRecordId.value, 'synastry_link')
+        }
+      } catch (err) {
+        console.error('记录分享失败:', err)
+      }
+      
       setTimeout(() => {
         copied.value = false
       }, 2000)
@@ -423,6 +578,13 @@ export function useSynastryAnalysis() {
     savedRecordId,
     shareLink,
     myCharts,
+    inviteCode,
+    inviteLink,
+    inviteLinkCopied,
+    inviteCodeCopied,
+    shareSynastryLink,
+    showRewardShareDialog,
+    loadingInviteCode,
     personA,
     personB,
     analysisData,
@@ -447,6 +609,7 @@ export function useSynastryAnalysis() {
     futureAdvice,
     summaryText,
     loadMyCharts,
+    loadInviteCode,
     applyChartToPersonA,
     applyChartToPersonB,
     calculateAnalysis,
@@ -454,11 +617,20 @@ export function useSynastryAnalysis() {
     saveRecord,
     shareRecord,
     copyShareLink,
+    copyInviteCode,
+    copyInviteLink,
+    copySynastryShareLink,
     loadRecordById,
     loadRecordByShareCode,
     getScoreColor,
     getScoreGradient,
-    getStrokeDasharray
+    getStrokeDasharray,
+    showStoryCardModal,
+    storyCardData,
+    generatingStoryCard,
+    generateStoryCard,
+    closeStoryCardModal,
+    goToStoryWall
   }
 }
 

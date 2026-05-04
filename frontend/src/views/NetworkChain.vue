@@ -21,6 +21,11 @@
           <span class="nav-text">星盘人脉链</span>
           <span class="nav-arrow">→</span>
         </div>
+        <div class="nav-item" @click="goToStoryWall">
+          <span class="nav-icon">📜</span>
+          <span class="nav-text">我的故事墙</span>
+          <span class="nav-arrow">→</span>
+        </div>
       </div>
 
       <div class="network-header">
@@ -559,6 +564,10 @@ function goToAstro() {
 
 function goToPhaseConnect() {
   router.push('/phase-connect')
+}
+
+function goToStoryWall() {
+  router.push('/chart/story-wall')
 }
 
 async function loadMyChart() {

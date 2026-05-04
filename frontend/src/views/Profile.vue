@@ -25,12 +25,48 @@
           <el-divider />
           
           <div class="feature-entrances">
+            <div class="quest-entrance invite-entrance">
+              <div class="entrance-content" @click="goToInvite">
+                <div class="entrance-icon">🎁</div>
+                <div class="entrance-info">
+                  <h5>邀请好友</h5>
+                  <p>邀请好友得三级奖励</p>
+                </div>
+                <div class="entrance-arrow">
+                  <span class="arrow">→</span>
+                </div>
+              </div>
+            </div>
+            <div class="quest-entrance time-capsule-entrance">
+              <div class="entrance-content" @click="goToTimeCapsule">
+                <div class="entrance-icon">💫</div>
+                <div class="entrance-info">
+                  <h5>时间胶囊</h5>
+                  <p>封存此刻，给未来的信</p>
+                </div>
+                <div class="entrance-arrow">
+                  <span class="arrow">→</span>
+                </div>
+              </div>
+            </div>
             <div class="quest-entrance network-chain-entrance">
               <div class="entrance-content" @click="goToNetworkChain">
                 <div class="entrance-icon">🌐</div>
                 <div class="entrance-info">
                   <h5>星盘人脉链</h5>
                   <p>发现与你能量共鸣的人脉</p>
+                </div>
+                <div class="entrance-arrow">
+                  <span class="arrow">→</span>
+                </div>
+              </div>
+            </div>
+            <div class="quest-entrance story-wall-entrance">
+              <div class="entrance-content" @click="goToStoryWall">
+                <div class="entrance-icon">📜</div>
+                <div class="entrance-info">
+                  <h5>我的故事墙</h5>
+                  <p>查看与他人的羁绊故事</p>
                 </div>
                 <div class="entrance-arrow">
                   <span class="arrow">→</span>
@@ -172,22 +208,19 @@ const passwordRules = {
 
 const loadStats = async () => {
   try {
-    const [convRes, msgRes] = await Promise.all([
-      conversationApi.getList({ limit: 1 }),
-      messageApi.getByConversationId(0, { limit: 1 }).catch(() => ({ total: 0 }))
-    ])
+    const convRes = await conversationApi.getList({ limit: 100 }).catch(() => ({ items: [], total: 0 }))
     
     conversationsCount.value = convRes.total || 0
     
     let totalMessages = 0
-    const convList = await conversationApi.getList({ limit: 100 })
     
-    for (const conv of convList.items || []) {
+    for (const conv of convRes.items || []) {
       try {
-        const msgRes = await messageApi.getByConversationId(conv.id, { limit: 1 })
+        if (!conv.id || conv.id <= 0) continue
+        const msgRes = await messageApi.getByConversationId(conv.id, { limit: 1 }).catch(() => ({ total: 0 }))
         totalMessages += msgRes.total || 0
       } catch (e) {
-        // ignore
+        console.warn('获取会话消息失败:', e?.message || e)
       }
     }
     
@@ -233,6 +266,33 @@ function goToNetworkChain() {
     return
   }
   router.push('/network-chain')
+}
+
+function goToTimeCapsule() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再查看时间胶囊')
+    router.push({ path: '/login', query: { redirect: '/time-capsule' } })
+    return
+  }
+  router.push('/time-capsule')
+}
+
+function goToInvite() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再邀请好友')
+    router.push({ path: '/login', query: { redirect: '/invite' } })
+    return
+  }
+  router.push('/invite')
+}
+
+function goToStoryWall() {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再查看故事墙')
+    router.push({ path: '/login', query: { redirect: '/story-wall' } })
+    return
+  }
+  router.push('/story-wall')
 }
 
 onMounted(() => {
@@ -313,7 +373,29 @@ onMounted(() => {
       margin-top: 8px;
     }
     
-    .entrance-content {
+    .invite-entrance .entrance-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.2) 100%);
+      border-radius: 10px;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .invite-entrance .entrance-content:hover {
+      border-color: rgba(139, 92, 246, 0.5);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.25) 100%);
+      transform: translateY(-1px);
+    }
+    
+    .invite-entrance .arrow {
+      color: #a78bfa;
+    }
+    
+    .network-chain-entrance .entrance-content {
       display: flex;
       align-items: center;
       gap: 10px;
@@ -325,10 +407,58 @@ onMounted(() => {
       cursor: pointer;
     }
     
-    .entrance-content:hover {
+    .network-chain-entrance .entrance-content:hover {
       border-color: rgba(34, 197, 94, 0.4);
       background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(16, 185, 129, 0.2) 100%);
       transform: translateY(-1px);
+    }
+    
+    .network-chain-entrance .arrow {
+      color: #22c55e;
+    }
+    
+    .time-capsule-entrance .entrance-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.15) 100%);
+      border-radius: 10px;
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .time-capsule-entrance .entrance-content:hover {
+      border-color: rgba(251, 191, 36, 0.5);
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(245, 158, 11, 0.2) 100%);
+      transform: translateY(-1px);
+    }
+    
+    .time-capsule-entrance .arrow {
+      color: #fbbf24;
+    }
+    
+    .story-wall-entrance .entrance-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(168, 85, 247, 0.15) 100%);
+      border-radius: 10px;
+      border: 1px solid rgba(236, 72, 153, 0.3);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .story-wall-entrance .entrance-content:hover {
+      border-color: rgba(236, 72, 153, 0.5);
+      background: linear-gradient(135deg, rgba(236, 72, 153, 0.25) 0%, rgba(168, 85, 247, 0.2) 100%);
+      transform: translateY(-1px);
+    }
+    
+    .story-wall-entrance .arrow {
+      color: #ec4899;
     }
     
     .entrance-icon {

@@ -40,32 +40,11 @@
               星象气象
             </router-link>
             <router-link 
-              to="/star-resonance" 
+              to="/social-plaza" 
               class="nav-link"
-              :class="{ active: route.path === '/star-resonance' }"
+              :class="{ active: route.path === '/social-plaza' }"
             >
-              星能共鸣
-            </router-link>
-            <router-link 
-              to="/plaza" 
-              class="nav-link"
-              :class="{ active: route.path === '/plaza' }"
-            >
-              平行人生
-            </router-link>
-            <router-link 
-              to="/boss-hall" 
-              class="nav-link"
-              :class="{ active: route.path === '/boss-hall' }"
-            >
-              副本大厅
-            </router-link>
-            <router-link 
-              to="/element-quest" 
-              class="nav-link"
-              :class="{ active: route.path === '/element-quest' }"
-            >
-              星图盲盒
+              ✨ 星光广场
             </router-link>
             
             <el-dropdown trigger="click" class="more-dropdown">
@@ -75,11 +54,46 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu class="custom-dropdown-menu">
-                  <router-link to="/social-icebreaker" class="dropdown-nav-link">
+                  <router-link to="/star-resonance" class="dropdown-nav-link">
                     <el-dropdown-item>
-                      <span>社交破冰</span>
+                      <span>星能共鸣</span>
                     </el-dropdown-item>
                   </router-link>
+                  <router-link to="/plaza" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>平行人生</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/boss-hall" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>副本大厅</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/element-quest" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>星图盲盒</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/topic-challenge" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>🔥 话题挑战</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/leaderboards" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>🏆 排行榜</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/daily-cp-match" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>💕 今日CP</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <el-dropdown-item divided>
+                    <router-link to="/social-icebreaker" style="text-decoration: none; color: inherit;">
+                      <span>社交破冰</span>
+                    </router-link>
+                  </el-dropdown-item>
                   <router-link to="/group-matrix" class="dropdown-nav-link">
                     <el-dropdown-item>
                       <span>群组分析</span>
@@ -93,6 +107,16 @@
                   <router-link to="/workbench" class="dropdown-nav-link">
                     <el-dropdown-item>
                       <span>占星师工作台</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/time-capsule" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>💫 时间胶囊</span>
+                    </el-dropdown-item>
+                  </router-link>
+                  <router-link to="/past-life" class="dropdown-nav-link">
+                    <el-dropdown-item>
+                      <span>🌙 前世故事</span>
                     </el-dropdown-item>
                   </router-link>
                   <el-dropdown-item divided>
@@ -148,6 +172,7 @@
                 <el-dropdown-menu class="custom-dropdown-menu">
                   <el-dropdown-item command="admin">后台管理</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="invite">🎁 邀请好友</el-dropdown-item>
                   <el-dropdown-item command="vip">⭐ 星钻会员</el-dropdown-item>
                   <el-dropdown-item command="gifts">🎁 礼物商城</el-dropdown-item>
                   <el-dropdown-item command="reports">📄 星盘报告</el-dropdown-item>
@@ -188,6 +213,8 @@
                 <el-dropdown-menu class="custom-dropdown-menu">
                   <el-dropdown-item command="charts">我的星盘</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="timeCapsule">💫 时间胶囊</el-dropdown-item>
+                  <el-dropdown-item command="invite">🎁 邀请好友</el-dropdown-item>
                   <el-dropdown-item command="vip">⭐ 星钻会员</el-dropdown-item>
                   <el-dropdown-item command="gifts">🎁 礼物商城</el-dropdown-item>
                   <el-dropdown-item command="reports">📄 星盘报告</el-dropdown-item>
@@ -208,16 +235,22 @@
       @checked-in="onCheckInSuccess"
       ref="checkInDialogRef"
     />
+    
+    <GrowthTaskPopup 
+      v-model="showGrowthPopup"
+      @closed="onGrowthPopupClosed"
+    />
   </div>
 </template>
 
 <script setup>
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, nextTick } from 'vue'
 import { ArrowDown, Calendar, CircleCheckFilled, Star, User, UserFilled } from '@element-plus/icons-vue'
-import { checkinApi } from '@/api'
+import { checkinApi, growthTasksApi } from '@/api'
 import CheckInDialog from '@/components/CheckInDialog.vue'
+import GrowthTaskPopup from '@/components/GrowthTaskPopup.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -227,7 +260,31 @@ const showCheckInDialog = ref(false)
 const hasCheckedInToday = ref(true)
 const checkInDialogRef = ref(null)
 
+const showGrowthPopup = ref(false)
+const growthPopupData = ref(null)
+
 const showAuthButtons = computed(() => !route.meta.hideAuth)
+
+async function checkGrowthPopup() {
+  if (!userStore.isLoggedIn && !localStorage.getItem('token')) {
+    return
+  }
+  
+  try {
+    const response = await growthTasksApi.getPopupStatus()
+    growthPopupData.value = response
+    
+    if (response.should_show) {
+      showGrowthPopup.value = true
+    }
+  } catch (error) {
+    console.warn('获取成长任务弹窗状态失败:', error)
+  }
+}
+
+function onGrowthPopupClosed() {
+  userStore.markPopupSeen(true)
+}
 
 async function loadCheckInStatus() {
   if (!userStore.isLoggedIn && !localStorage.getItem('token')) {
@@ -271,6 +328,10 @@ function goToProfile() {
   router.push('/profile')
 }
 
+function goToInvite() {
+  router.push('/invite')
+}
+
 function handleCommand(command) {
   switch (command) {
     case 'admin':
@@ -281,6 +342,12 @@ function handleCommand(command) {
       break
     case 'profile':
       router.push('/profile')
+      break
+    case 'timeCapsule':
+      router.push('/time-capsule')
+      break
+    case 'invite':
+      router.push('/invite')
       break
     case 'vip':
       router.push('/vip-center')
@@ -302,6 +369,9 @@ watch(
   (isLoggedIn) => {
     if (isLoggedIn) {
       loadCheckInStatus()
+      nextTick(() => {
+        checkGrowthPopup()
+      })
     }
   }
 )
@@ -309,6 +379,9 @@ watch(
 onMounted(() => {
   if (userStore.isLoggedIn || localStorage.getItem('token')) {
     loadCheckInStatus()
+    nextTick(() => {
+      checkGrowthPopup()
+    })
   }
 })
 </script>

@@ -38,6 +38,123 @@
       </div>
 
       <div v-else class="hall-content">
+        <div v-if="hasActivities" class="activities-section">
+          <div class="section-header">
+            <h3>
+              <el-icon><Timer /></el-icon>
+              限时活动
+              <el-tag v-if="activeActivities.length > 0" type="danger" effect="dark" size="small">
+                进行中 {{ activeActivities.length }}
+              </el-tag>
+            </h3>
+            <el-button type="primary" link @click="loadActivities" :loading="loadingActivities">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
+          </div>
+
+          <div v-if="activeActivities.length > 0" class="activities-group">
+            <div class="group-header">
+              <el-tag type="danger" effect="dark">进行中</el-tag>
+            </div>
+            <div class="activities-grid">
+              <div 
+                v-for="activity in activeActivities" 
+                :key="activity.id" 
+                class="activity-card activity-active"
+                @click="viewActivityDetail(activity)"
+              >
+                <div class="activity-header">
+                  <div class="activity-type-badge" :class="getActivityTypeClass(activity.activity_type)">
+                    {{ getActivityTypeLabel(activity.activity_type) }}
+                  </div>
+                  <div class="activity-timer">
+                    <el-icon><Timer /></el-icon>
+                    <span>{{ formatActivityTime(activity.start_time, activity.end_time) }}</span>
+                  </div>
+                </div>
+                <div class="activity-body">
+                  <h4 class="activity-name">{{ activity.display_name || activity.name }}</h4>
+                  <p class="activity-desc">{{ activity.description || '暂无描述' }}</p>
+                  <div v-if="activity.benefits && activity.benefits.length > 0" class="activity-benefits">
+                    <span class="benefit-label">活动权益:</span>
+                    <div class="benefit-tags">
+                      <el-tag 
+                        v-for="(benefit, idx) in activity.benefits.slice(0, 3)" 
+                        :key="idx" 
+                        type="success"
+                        size="small"
+                        effect="light"
+                      >
+                        {{ getBenefitLabel(benefit.benefit_type) }}
+                      </el-tag>
+                      <span v-if="activity.benefits.length > 3" class="more-benefits">
+                        +{{ activity.benefits.length - 3 }} 更多
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="activity-footer">
+                  <el-button type="primary" size="small" @click.stop="viewActivityDetail(activity)">
+                    查看详情
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="upcomingActivities.length > 0" class="activities-group">
+            <div class="group-header">
+              <el-tag type="warning" effect="dark">即将开始</el-tag>
+            </div>
+            <div class="activities-grid">
+              <div 
+                v-for="activity in upcomingActivities" 
+                :key="activity.id" 
+                class="activity-card activity-upcoming"
+                @click="viewActivityDetail(activity)"
+              >
+                <div class="activity-header">
+                  <div class="activity-type-badge" :class="getActivityTypeClass(activity.activity_type)">
+                    {{ getActivityTypeLabel(activity.activity_type) }}
+                  </div>
+                  <div class="activity-countdown">
+                    <el-icon><AlarmClock /></el-icon>
+                    <span>即将开始: {{ formatStartTime(activity.start_time) }}</span>
+                  </div>
+                </div>
+                <div class="activity-body">
+                  <h4 class="activity-name">{{ activity.display_name || activity.name }}</h4>
+                  <p class="activity-desc">{{ activity.description || '暂无描述' }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="endedActivities.length > 0" class="activities-group">
+            <div class="group-header">
+              <el-tag type="info" effect="dark">已结束</el-tag>
+            </div>
+            <div class="activities-grid ended-grid">
+              <div 
+                v-for="activity in endedActivities.slice(0, 3)" 
+                :key="activity.id" 
+                class="activity-card activity-ended"
+              >
+                <div class="activity-header">
+                  <div class="activity-type-badge" :class="getActivityTypeClass(activity.activity_type)">
+                    {{ getActivityTypeLabel(activity.activity_type) }}
+                  </div>
+                  <el-tag type="info" size="small">已结束</el-tag>
+                </div>
+                <div class="activity-body">
+                  <h4 class="activity-name">{{ activity.display_name || activity.name }}</h4>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="element-info-bar">
           <div class="element-title">
             <el-icon><InfoFilled /></el-icon>
@@ -641,24 +758,115 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="showActivityDetailDialog"
+      title="活动详情"
+      width="600px"
+      class="activity-detail-dialog"
+    >
+      <div v-if="selectedActivity" class="activity-detail-content">
+        <div class="detail-header">
+          <div class="detail-title-section">
+            <h2 class="detail-title">{{ selectedActivity.display_name || selectedActivity.name }}</h2>
+            <div class="detail-meta">
+              <el-tag 
+                :type="getActivityTypeTagType(selectedActivity.activity_type)" 
+                effect="dark"
+              >
+                {{ getActivityTypeLabel(selectedActivity.activity_type) }}
+              </el-tag>
+              <span class="detail-time">
+                {{ formatActivityTime(selectedActivity.start_time, selectedActivity.end_time) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="selectedActivity.description" class="detail-description">
+          <h4>活动介绍</h4>
+          <p>{{ selectedActivity.description }}</p>
+        </div>
+
+        <div v-if="selectedActivity.rules_text" class="detail-rules">
+          <h4>活动规则</h4>
+          <p>{{ selectedActivity.rules_text }}</p>
+        </div>
+
+        <div v-if="selectedActivity.brand_name" class="detail-brand">
+          <h4>联名品牌</h4>
+          <div class="brand-info">
+            <span class="brand-name">{{ selectedActivity.brand_name }}</span>
+          </div>
+        </div>
+
+        <div v-if="selectedActivity.benefits && selectedActivity.benefits.length > 0" class="detail-benefits">
+          <h4>
+            <el-icon><Present /></el-icon>
+            活动权益
+          </h4>
+          <div class="benefits-list">
+            <div 
+              v-for="(benefit, idx) in selectedActivity.benefits" 
+              :key="idx" 
+              class="benefit-item"
+            >
+              <div class="benefit-name">{{ getBenefitLabel(benefit.benefit_type) }}</div>
+              <div v-if="benefit.benefit_name !== getBenefitLabel(benefit.benefit_type)" class="benefit-display-name">
+                {{ benefit.benefit_name }}
+              </div>
+              <div class="benefit-details">
+                <span v-if="benefit.multiplier > 1" class="detail-tag">
+                  {{ benefit.multiplier }}倍奖励
+                </span>
+                <span v-if="benefit.discount_percent" class="detail-tag">
+                  {{ benefit.discount_percent }}%折扣
+                </span>
+                <span v-if="benefit.rate_up_percent" class="detail-tag">
+                  概率UP +{{ benefit.rate_up_percent }}%
+                </span>
+                <span v-if="benefit.free_count > 0" class="detail-tag">
+                  免费{{ benefit.free_count }}次
+                </span>
+              </div>
+              <div v-if="benefit.description" class="benefit-desc">
+                {{ benefit.description }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="selectedActivity.target_zodiac_sign" class="detail-zodiac">
+          <h4>目标星座</h4>
+          <el-tag type="warning" effect="light">
+            {{ selectedActivity.target_zodiac_sign }}
+          </el-tag>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="showActivityDetailDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Connection, Lightning, Star, Refresh, Sunny, VideoCamera, InfoFilled,
-  User, Plus, Film, Trophy, Close, Coin
+  User, Plus, Film, Trophy, Close, Coin, Timer, AlarmClock, Promotion, Present
 } from '@element-plus/icons-vue'
-import { bossBattleApi } from '@/api'
+import { bossBattleApi, activityApi } from '@/api'
 
 const router = useRouter()
 
 const loading = ref(true)
 const refreshing = ref(false)
 const creatingTeam = ref(false)
+const loadingActivities = ref(false)
 
 const activeBosses = ref([])
 const selectedBoss = ref(null)
@@ -671,6 +879,25 @@ const battleResult = ref(null)
 const showBossDetailDialog = ref(false)
 const showCreateTeamDialog = ref(false)
 const showBattleResultDialog = ref(false)
+const showActivityDetailDialog = ref(false)
+
+const selectedActivity = ref(null)
+
+const activitiesData = ref({
+  active: [],
+  upcoming: [],
+  ended: [],
+  current_time: null
+})
+
+const activeActivities = computed(() => activitiesData.value.active || [])
+const upcomingActivities = computed(() => activitiesData.value.upcoming || [])
+const endedActivities = computed(() => activitiesData.value.ended || [])
+const hasActivities = computed(() => 
+  activeActivities.value.length > 0 || 
+  upcomingActivities.value.length > 0 || 
+  endedActivities.value.length > 0
+)
 
 const createTeamForm = reactive({
   team_name: '',
@@ -678,6 +905,85 @@ const createTeamForm = reactive({
   name: '',
   combat_power: 100
 })
+
+const ACTIVITY_TYPE_LABELS = {
+  'FESTIVAL': '节日活动',
+  'ZODIAC_MONTH': '星座月',
+  'WEEKEND_DUNGEON': '周末副本',
+  'BRAND_COLLAB': '品牌联名'
+}
+
+const ACTIVITY_TYPE_CLASSES = {
+  'FESTIVAL': 'type-festival',
+  'ZODIAC_MONTH': 'type-zodiac',
+  'WEEKEND_DUNGEON': 'type-weekend',
+  'BRAND_COLLAB': 'type-brand'
+}
+
+const BENEFIT_TYPE_LABELS = {
+  'SYNASTRY_DOUBLE_REWARD': '合盘双倍奖励',
+  'SYNASTRY_FREE': '免费合盘',
+  'BLIND_BOX_DISCOUNT': '盲盒折扣',
+  'BLIND_BOX_RATE_UP': '抽卡概率UP',
+  'STARDUST_DOUBLE': '双倍星尘',
+  'LIMITED_CARD': '限定卡牌',
+  'BRAND_COUPON': '联名券',
+  'LIMITED_ITEM': '限定周边'
+}
+
+const getActivityTypeLabel = (type) => {
+  return ACTIVITY_TYPE_LABELS[type] || type
+}
+
+const getActivityTypeClass = (type) => {
+  return ACTIVITY_TYPE_CLASSES[type] || ''
+}
+
+const getBenefitLabel = (type) => {
+  return BENEFIT_TYPE_LABELS[type] || type
+}
+
+const formatActivityTime = (startTime, endTime) => {
+  if (!startTime || !endTime) return ''
+  const start = new Date(startTime)
+  const end = new Date(endTime)
+  return `${start.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}`
+}
+
+const formatStartTime = (startTime) => {
+  if (!startTime) return ''
+  const start = new Date(startTime)
+  return start.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit' })
+}
+
+const loadActivities = async () => {
+  loadingActivities.value = true
+  try {
+    const result = await activityApi.getHallActivities()
+    if (result) {
+      activitiesData.value = result
+    }
+  } catch (error) {
+    console.error('加载活动列表失败:', error)
+  } finally {
+    loadingActivities.value = false
+  }
+}
+
+const viewActivityDetail = (activity) => {
+  selectedActivity.value = activity
+  showActivityDetailDialog.value = true
+}
+
+const getActivityTypeTagType = (type) => {
+  const tagTypes = {
+    'FESTIVAL': 'danger',
+    'ZODIAC_MONTH': 'warning',
+    'WEEKEND_DUNGEON': 'success',
+    'BRAND_COLLAB': 'info'
+  }
+  return tagTypes[type] || 'primary'
+}
 
 const getStarStyle = (i) => {
   const left = Math.random() * 100
@@ -892,6 +1198,7 @@ const startBattle = async (teamId) => {
 
 onMounted(() => {
   loadHallData()
+  loadActivities()
 })
 </script>
 
@@ -1494,56 +1801,64 @@ onMounted(() => {
 }
 
 .boss-detail-content {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
   .detail-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid #e4e7ed;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.3);
 
     .detail-name-section {
       .detail-name {
         margin: 0 0 4px;
-        font-size: 24px;
-        font-weight: 700;
-        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+        font-size: 28px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #a78bfa, #f472b6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+        text-shadow: 0 0 20px rgba(167, 139, 250, 0.3);
       }
 
       .detail-title {
         margin: 0;
         font-size: 14px;
-        color: #6b7280;
+        color: rgba(255, 255, 255, 0.7);
         font-style: italic;
+        -webkit-font-smoothing: antialiased;
       }
     }
   }
 
   h4 {
     margin: 0 0 12px;
-    font-size: 15px;
-    font-weight: 600;
-    color: #374151;
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
     display: flex;
     align-items: center;
     gap: 8px;
+    -webkit-font-smoothing: antialiased;
   }
 
   .detail-lore {
     margin-bottom: 20px;
     padding: 16px;
-    background: rgba(139, 92, 246, 0.05);
+    background: rgba(139, 92, 246, 0.1);
     border-radius: 12px;
     border-left: 3px solid #a78bfa;
 
     p {
       margin: 0;
       font-size: 13px;
-      color: #4b5563;
+      color: rgba(255, 255, 255, 0.65);
       line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
     }
   }
 
@@ -1553,6 +1868,12 @@ onMounted(() => {
     .detail-health {
       margin-bottom: 16px;
 
+      h4 {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
       .health-display {
         display: flex;
         align-items: baseline;
@@ -1560,19 +1881,23 @@ onMounted(() => {
         margin-bottom: 8px;
 
         .health-number {
-          font-size: 24px;
-          font-weight: 700;
+          font-size: 32px;
+          font-weight: 800;
           color: #22c55e;
+          text-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+          -webkit-font-smoothing: antialiased;
         }
 
         .health-divider {
-          font-size: 16px;
-          color: #9ca3af;
+          font-size: 20px;
+          color: rgba(255, 255, 255, 0.5);
         }
 
         .total {
-          color: #6b7280;
-          font-weight: 500;
+          color: rgba(255, 255, 255, 0.7);
+          font-weight: 600;
+          font-size: 28px;
+          -webkit-font-smoothing: antialiased;
         }
       }
     }
@@ -1584,17 +1909,20 @@ onMounted(() => {
       .power-item {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
 
         .power-label {
           font-size: 12px;
-          color: #6b7280;
+          color: rgba(255, 255, 255, 0.5);
+          font-weight: 500;
         }
 
         .power-value {
-          font-size: 18px;
-          font-weight: 600;
-          color: #ef4444;
+          font-size: 24px;
+          font-weight: 700;
+          color: #f87171;
+          text-shadow: 0 0 10px rgba(248, 113, 113, 0.4);
+          -webkit-font-smoothing: antialiased;
         }
       }
     }
@@ -1606,9 +1934,16 @@ onMounted(() => {
     gap: 16px;
     margin-bottom: 20px;
 
+    h4 {
+      grid-column: span 2;
+      color: #ffffff;
+      font-weight: 700;
+    }
+
     .element-detail {
       padding: 16px;
       border-radius: 12px;
+      -webkit-font-smoothing: antialiased;
 
       .element-display {
         display: flex;
@@ -1617,40 +1952,45 @@ onMounted(() => {
         margin-bottom: 8px;
 
         .symbol {
-          font-size: 32px;
+          font-size: 36px;
+          filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
         }
 
         .name {
-          font-size: 18px;
-          font-weight: 600;
+          font-size: 20px;
+          font-weight: 700;
         }
       }
 
       .element-hint {
         font-size: 12px;
-        color: #6b7280;
+        color: rgba(255, 255, 255, 0.6);
+        line-height: 1.5;
 
         .highlight {
-          color: #8b5cf6;
-          font-weight: 600;
+          color: #a78bfa;
+          font-weight: 700;
+          -webkit-font-smoothing: antialiased;
         }
       }
 
       &.weakness {
-        background: rgba(34, 197, 94, 0.1);
-        border: 1px solid rgba(34, 197, 94, 0.3);
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.1));
+        border: 1px solid rgba(34, 197, 94, 0.4);
 
         .name {
           color: #22c55e;
+          text-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
         }
       }
 
       &.resistance {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(248, 113, 113, 0.1));
+        border: 1px solid rgba(239, 68, 68, 0.4);
 
         .name {
           color: #ef4444;
+          text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
         }
       }
     }
@@ -1667,13 +2007,14 @@ onMounted(() => {
 
     .skill-card {
       padding: 16px;
-      background: rgba(255, 255, 255, 0.5);
-      border: 1px solid #e4e7ed;
+      background: rgba(30, 30, 60, 0.6);
+      border: 1px solid rgba(139, 92, 246, 0.3);
       border-radius: 12px;
+      -webkit-font-smoothing: antialiased;
 
       &.ultimate {
-        background: rgba(239, 68, 68, 0.05);
-        border-color: rgba(239, 68, 68, 0.3);
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(248, 113, 113, 0.05));
+        border: 1px solid rgba(239, 68, 68, 0.4);
       }
 
       .skill-header {
@@ -1683,17 +2024,19 @@ onMounted(() => {
         margin-bottom: 8px;
 
         .skill-name {
-          font-size: 15px;
-          font-weight: 600;
-          color: #374151;
+          font-size: 16px;
+          font-weight: 700;
+          color: #ffffff;
+          -webkit-font-smoothing: antialiased;
         }
       }
 
       .skill-description {
         margin: 0 0 10px;
         font-size: 13px;
-        color: #6b7280;
-        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.6);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
       }
 
       .skill-stats {
@@ -1705,10 +2048,11 @@ onMounted(() => {
           align-items: center;
           gap: 4px;
           font-size: 12px;
-          color: #6b7280;
+          color: rgba(255, 255, 255, 0.6);
+          -webkit-font-smoothing: antialiased;
 
           .stat-label {
-            color: #9ca3af;
+            color: rgba(255, 255, 255, 0.45);
           }
 
           .symbol {
@@ -1716,8 +2060,10 @@ onMounted(() => {
           }
 
           .damage {
-            color: #ef4444;
-            font-weight: 600;
+            color: #f87171;
+            font-weight: 700;
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
           }
         }
       }
@@ -1734,10 +2080,11 @@ onMounted(() => {
         align-items: center;
         gap: 8px;
         font-size: 13px;
-        color: #6b7280;
+        color: rgba(255, 255, 255, 0.6);
+        -webkit-font-smoothing: antialiased;
 
         .timing-label {
-          color: #9ca3af;
+          color: rgba(255, 255, 255, 0.45);
         }
       }
     }
@@ -2031,6 +2378,308 @@ onMounted(() => {
           background: rgba(139, 92, 246, 0.1);
           border-color: rgba(139, 92, 246, 0.3);
         }
+      }
+    }
+  }
+}
+
+.activities-section {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.05), rgba(139, 92, 246, 0.05));
+  border: 1px solid rgba(236, 72, 153, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+
+  .section-header {
+    margin-bottom: 16px;
+
+    h3 {
+      .el-tag {
+        margin-left: 8px;
+      }
+    }
+  }
+}
+
+.activities-group {
+  margin-bottom: 20px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .group-header {
+    margin-bottom: 12px;
+  }
+}
+
+.activities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+
+  &.ended-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+}
+
+.activity-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.2);
+  }
+
+  .activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .activity-type-badge {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+
+    &.type-festival {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    &.type-zodiac {
+      background: rgba(251, 191, 36, 0.2);
+      color: #fcd34d;
+    }
+
+    &.type-weekend {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+    }
+
+    &.type-brand {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+    }
+  }
+
+  .activity-timer,
+  .activity-countdown {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .activity-body {
+    .activity-name {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .activity-desc {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  }
+
+  .activity-benefits {
+    .benefit-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-right: 8px;
+    }
+
+    .benefit-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+
+      .more-benefits {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.4);
+      }
+    }
+  }
+
+  .activity-footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  &.activity-active {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(255, 255, 255, 0.02));
+    animation: pulse-border 2s infinite;
+  }
+
+  &.activity-upcoming {
+    border-color: rgba(251, 191, 36, 0.3);
+    opacity: 0.85;
+  }
+
+  &.activity-ended {
+    opacity: 0.5;
+    border-style: dashed;
+
+    .activity-body {
+      .activity-name {
+        text-decoration: line-through;
+      }
+    }
+  }
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+.activity-detail-content {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  .detail-header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+
+    .detail-title-section {
+      .detail-title {
+        margin: 0 0 8px;
+        font-size: 22px;
+        font-weight: 800;
+        color: #ffffff;
+        text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .detail-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        .detail-time {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.65);
+          -webkit-font-smoothing: antialiased;
+        }
+      }
+    }
+  }
+
+  h4 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .detail-description,
+  .detail-rules,
+  .detail-brand,
+  .detail-benefits,
+  .detail-zodiac {
+    margin-bottom: 20px;
+  }
+
+  .detail-benefits {
+    .benefits-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .benefit-item {
+        padding: 16px;
+        background: rgba(30, 30, 60, 0.6);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 12px;
+        -webkit-font-smoothing: antialiased;
+
+        .benefit-name {
+          font-size: 15px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 4px;
+          -webkit-font-smoothing: antialiased;
+        }
+
+        .benefit-display-name {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.6);
+          margin-bottom: 8px;
+          -webkit-font-smoothing: antialiased;
+        }
+
+        .benefit-details {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 8px;
+
+          .detail-tag {
+            padding: 4px 10px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            border-radius: 4px;
+            font-size: 12px;
+            color: #22c55e;
+            font-weight: 600;
+            -webkit-font-smoothing: antialiased;
+          }
+        }
+
+        .benefit-desc {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.55);
+          margin: 0;
+          -webkit-font-smoothing: antialiased;
+        }
+      }
+    }
+  }
+
+  .detail-brand {
+    .brand-info {
+      .brand-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: #ffffff;
+        -webkit-font-smoothing: antialiased;
       }
     }
   }

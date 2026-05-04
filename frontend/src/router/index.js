@@ -131,6 +131,18 @@ const routes = [
         meta: { title: '平行人生广场' }
       },
       {
+        path: 'social-plaza',
+        name: 'SocialPlaza',
+        component: () => import('@/views/SocialPlaza.vue'),
+        meta: { title: '星光广场' }
+      },
+      {
+        path: 'topic-challenge',
+        name: 'TopicChallenge',
+        component: () => import('@/views/TopicChallenge.vue'),
+        meta: { title: '话题挑战' }
+      },
+      {
         path: 'boss-hall',
         name: 'BossBattleHall',
         component: () => import('@/views/BossBattleHall.vue'),
@@ -177,6 +189,90 @@ const routes = [
         name: 'ReportShop',
         component: () => import('@/views/ReportShop.vue'),
         meta: { title: '星盘报告商城', requiresAuth: true }
+      },
+      {
+        path: 'invite',
+        name: 'Invite',
+        component: () => import('@/views/Invite.vue'),
+        meta: { title: '邀请好友', requiresAuth: true }
+      },
+      {
+        path: 'leaderboards',
+        name: 'Leaderboards',
+        component: () => import('@/views/Leaderboards.vue'),
+        meta: { title: '荣誉排行榜' }
+      },
+      {
+        path: 'daily-cp-match',
+        name: 'DailyCPMatch',
+        component: () => import('@/views/DailyCPMatch.vue'),
+        meta: { title: '每日CP匹配', requiresAuth: true }
+      },
+      {
+        path: 'time-capsule',
+        name: 'TimeCapsule',
+        component: () => import('@/views/TimeCapsule.vue'),
+        meta: { title: '时间胶囊', requiresAuth: true }
+      },
+      {
+        path: 'time-capsule/create',
+        name: 'TimeCapsuleCreate',
+        component: () => import('@/views/TimeCapsule.vue'),
+        meta: { title: '创建时间胶囊', requiresAuth: true }
+      },
+      {
+        path: 'time-capsule/edit/:id',
+        name: 'TimeCapsuleEdit',
+        component: () => import('@/views/TimeCapsule.vue'),
+        meta: { title: '编辑时间胶囊', requiresAuth: true }
+      },
+      {
+        path: 'time-capsule/detail/:id',
+        name: 'TimeCapsuleDetail',
+        component: () => import('@/views/TimeCapsuleDetail.vue'),
+        meta: { title: '时间胶囊详情', requiresAuth: true }
+      },
+      {
+        path: 'past-life',
+        name: 'PastLife',
+        component: () => import('@/views/PastLife.vue'),
+        meta: { title: '前世故事' }
+      },
+      {
+        path: 'past-life/records',
+        name: 'PastLifeRecords',
+        component: () => import('@/views/PastLifeRecords.vue'),
+        meta: { title: '我的前世记录', requiresAuth: true }
+      },
+      {
+        path: 'past-life/detail/:id',
+        name: 'PastLifeDetail',
+        component: () => import('@/views/PastLifeDetail.vue'),
+        meta: { title: '前世故事详情' }
+      },
+      {
+        path: 'past-life/synastry/detail/:id',
+        name: 'PastLifeSynastryDetail',
+        component: () => import('@/views/PastLifeDetail.vue'),
+        meta: { title: '合盘前世故事详情' }
+      },
+      {
+        path: 'past-life/share/:code',
+        name: 'PastLifeShare',
+        component: () => import('@/views/PastLifeShare.vue'),
+        meta: { title: '前世故事分享' }
+      },
+      {
+        path: 'story-wall',
+        name: 'StoryWall',
+        component: () => import('@/views/StoryWall.vue'),
+        meta: { title: '我的故事墙', requiresAuth: true }
+      },
+      {
+        path: 'story-wall/:userId',
+        name: 'UserStoryWall',
+        component: () => import('@/views/StoryWall.vue'),
+        meta: { title: '用户故事墙' }
       }
     ]
   },
@@ -204,6 +300,12 @@ const routes = [
         name: 'UserManage',
         component: () => import('@/views/UserManage.vue'),
         meta: { title: '用户管理' }
+      },
+      {
+        path: 'topic-challenge',
+        name: 'TopicChallengeAdmin',
+        component: () => import('@/views/TopicChallengeAdmin.vue'),
+        meta: { title: '话题挑战管理' }
       },
       {
         path: 'profile',

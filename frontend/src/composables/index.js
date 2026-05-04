@@ -13,3 +13,8 @@ export {
   getTransitStarStyle,
   DIMENSION_CONFIG
 } from './useTransitAnalysis'
+export {
+  usePastLifeAnalysis,
+  usePastLifeShare,
+  getPastLifeStarStyle
+} from './usePastLifeAnalysis'

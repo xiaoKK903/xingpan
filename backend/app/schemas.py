@@ -28,6 +28,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, max_length=100, description="密码")
+    invite_code: Optional[str] = Field(None, max_length=20, description="邀请码（可选）")
 
 
 class UserLogin(BaseModel):

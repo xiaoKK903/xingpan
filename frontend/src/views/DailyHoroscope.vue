@@ -287,7 +287,7 @@ const errorMessage = ref('')
 const selectedSign = ref('白羊座')
 const horoscopeData = ref(null)
 const zodiacSigns = ref([])
-const usePersonalMode = ref(true)
+const usePersonalMode = ref(false)
 
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 
@@ -428,7 +428,7 @@ watch(selectedSign, () => {
 onMounted(async () => {
   await loadZodiacSigns()
   
-  if (isLoggedIn.value) {
+  if (usePersonalMode.value && isLoggedIn.value) {
     await loadPersonalHoroscope()
   } else {
     await loadHoroscope()

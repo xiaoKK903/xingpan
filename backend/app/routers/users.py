@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
+import logging
 from app.database import get_db
 from app.models import User
 from app.schemas import (
@@ -15,6 +16,14 @@ from app.schemas import (
     ApiResponse
 )
 from app.config import settings
+from app.services.invite_service import (
+    get_invite_code_by_code,
+    create_invite_relation,
+    process_share_reward,
+    get_or_create_invite_code
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -116,7 +125,11 @@ def get_current_user_optional(
 
 
 @router.post("/register", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
+def register(
+    request: Request,
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
         raise HTTPException(
@@ -132,6 +145,17 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
                 detail="邮箱已被注册"
             )
     
+    inviter_code = None
+    inviter = None
+    if user_data.invite_code:
+        inviter_code = get_invite_code_by_code(db, user_data.invite_code)
+        if not inviter_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="邀请码无效或已过期"
+            )
+        inviter = db.query(User).filter(User.id == inviter_code.user_id).first()
+    
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         username=user_data.username,
@@ -139,13 +163,49 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         hashed_password=hashed_password
     )
     db.add(new_user)
+    db.flush()
+    
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("User-Agent")
+    
+    invite_relation = None
+    if inviter_code and inviter:
+        invite_relation, error = create_invite_relation(
+            db=db,
+            inviter_id=inviter.id,
+            invitee_id=new_user.id,
+            invite_code=inviter_code.invite_code,
+            ip=client_ip,
+            device=user_agent
+        )
+        
+        if invite_relation and invite_relation.is_valid:
+            process_share_reward(db, invite_relation)
+            logger.info(f"邀请关系创建成功并发放分享奖励: inviter_id={inviter.id}, invitee_id={new_user.id}")
+        elif error:
+            logger.warning(f"邀请关系创建失败: {error}")
+    
+    get_or_create_invite_code(db, new_user.id)
+    
     db.commit()
     db.refresh(new_user)
+    
+    response_data = {
+        "user": UserResponse.model_validate(new_user).model_dump()
+    }
+    
+    if invite_relation:
+        response_data["invite_info"] = {
+            "inviter_username": inviter.username if inviter else None,
+            "invite_code_used": invite_relation.invite_code_used,
+            "is_valid": invite_relation.is_valid,
+            "invalid_reason": invite_relation.invalid_reason
+        }
     
     return ApiResponse(
         code=201,
         message="注册成功",
-        data={"user": UserResponse.model_validate(new_user).model_dump()}
+        data=response_data
     )
 
 

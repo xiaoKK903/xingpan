@@ -475,29 +475,32 @@
       </Transition>
     </div>
 
-    <el-dialog
+    <SynastryShareDialog
       v-model="showShareDialog"
-      title="分享报告"
-      width="400px"
-      center
-    >
-      <div class="share-dialog-content">
-        <p class="share-tip">复制以下分享链接发送给好友：</p>
-        <div class="share-link-wrapper">
-          <el-input v-model="shareLink" readonly />
-          <el-button type="primary" @click="copyShareLink">
-            {{ copied ? '已复制' : '复制' }}
-          </el-button>
-        </div>
-        <p class="share-note">
-          <el-icon><InfoFilled /></el-icon>
-          对方可以通过此链接查看这份合盘分析报告
-        </p>
-      </div>
-      <template #footer>
-        <el-button @click="showShareDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
+      :share-link="shareLink"
+      @copy-share-link="handleCopyShareLink"
+    />
+
+    <SynastryRewardShareDialog
+      v-model="showRewardShareDialog"
+      :invite-code="inviteCode"
+      :invite-link="inviteLink"
+      :share-synastry-link="shareSynastryLink"
+      :loading-invite-code="loadingInviteCode"
+      @copy-invite-code="handleCopyInviteCode"
+      @copy-invite-link="handleCopyInviteLink"
+      @copy-synastry-share-link="handleCopySynastryShareLink"
+    />
+
+    <StoryCardModal
+      v-model:visible="showStoryCardModal"
+      :story-card="storyCardData"
+      :synastry-data="originalSynastryData"
+      :analysis-data="analysisData"
+      :person-a-name="personALabel"
+      :person-b-name="personBLabel"
+      @go-to-story-wall="goToStoryWall"
+    />
   </div>
 </template>
 
@@ -507,11 +510,15 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Connection, Plus, FolderOpened, MagicStick, Document,
   ArrowLeft, Share, Link, Check, Warning, Star,
-  Tools, InfoFilled, Loading, ChatDotRound
+  Tools, InfoFilled, Loading, ChatDotRound,
+  CopyDocument, User, ArrowRight
 } from '@element-plus/icons-vue'
 import { CITIES_DB, QUICK_CITIES } from '@/constants/chart'
 import SynastryPersonForm from '@/components/synastry/SynastryPersonForm.vue'
 import RadarChart from '@/components/synastry/RadarChart.vue'
+import SynastryShareDialog from '@/components/synastry/SynastryShareDialog.vue'
+import SynastryRewardShareDialog from '@/components/synastry/SynastryRewardShareDialog.vue'
+import StoryCardModal from '@/components/synastry/StoryCardModal.vue'
 import { useSynastryAnalysis, getStarStyle } from '@/composables'
 import { privateChatApi } from '@/api'
 import { ElMessage } from 'element-plus'
@@ -531,6 +538,13 @@ const {
   savedRecordId,
   shareLink,
   myCharts,
+  inviteCode,
+  inviteLink,
+  inviteLinkCopied,
+  inviteCodeCopied,
+  shareSynastryLink,
+  showRewardShareDialog,
+  loadingInviteCode,
   personA,
   personB,
   analysisData,
@@ -555,6 +569,7 @@ const {
   futureAdvice,
   summaryText,
   loadMyCharts,
+  loadInviteCode,
   applyChartToPersonA,
   applyChartToPersonB,
   calculateAnalysis,
@@ -562,11 +577,20 @@ const {
   saveRecord,
   shareRecord,
   copyShareLink,
+  copyInviteCode,
+  copyInviteLink,
+  copySynastryShareLink,
   loadRecordById,
   loadRecordByShareCode,
   getScoreColor,
   getScoreGradient,
-  getStrokeDasharray
+  getStrokeDasharray,
+  showStoryCardModal,
+  storyCardData,
+  generatingStoryCard,
+  generateStoryCard,
+  closeStoryCardModal,
+  goToStoryWall
 } = useSynastryAnalysis()
 
 const scoreGradientId = computed(() => `score-gradient-${Date.now()}`)
@@ -594,6 +618,22 @@ watch(isLoggedIn, (newVal) => {
     loadMyCharts()
   }
 })
+
+function handleCopyShareLink(link) {
+  copyShareLink()
+}
+
+function handleCopyInviteCode(code) {
+  copyInviteCode()
+}
+
+function handleCopyInviteLink(link) {
+  copyInviteLink()
+}
+
+function handleCopySynastryShareLink(link) {
+  copySynastryShareLink()
+}
 
 async function startPrivateChat() {
   console.log('[SynastryAnalysis] startPrivateChat 被调用，route.query:', route.query)
@@ -1662,6 +1702,246 @@ onMounted(async () => {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.4);
   margin: 0;
+}
+
+:deep(.reward-share-dialog) {
+  .el-dialog {
+    background: linear-gradient(180deg, rgba(15, 15, 35, 0.98) 0%, rgba(20, 20, 50, 0.98) 100%) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    border-radius: 16px !important;
+  }
+
+  .el-dialog__header {
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15) !important;
+    padding: 16px 20px !important;
+    margin-right: 0 !important;
+  }
+
+  .el-dialog__body {
+    padding: 20px !important;
+  }
+
+  .el-dialog__footer {
+    border-top: 1px solid rgba(139, 92, 246, 0.15) !important;
+    padding: 16px 20px !important;
+  }
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.reward-share-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reward-intro {
+  text-align: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.intro-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.reward-stages {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stage-card {
+  flex: 1;
+  min-width: 140px;
+  background: rgba(30, 30, 60, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+
+  &.stage-1 {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+
+  &.stage-2 {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+  }
+
+  &.stage-3 {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+}
+
+.stage-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stage-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.stage-reward {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.stage-arrow {
+  display: flex;
+  align-items: center;
+  padding-top: 12px;
+  color: rgba(139, 92, 246, 0.4);
+}
+
+.share-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.share-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+}
+
+.share-option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(30, 30, 60, 0.4);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 10px;
+}
+
+.option-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.option-content {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.invite-code-display {
+  flex: 1;
+  padding: 10px 14px;
+  background: rgba(30, 30, 60, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.code-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #a78bfa;
+  letter-spacing: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+.link-input {
+  flex: 1;
+
+  :deep(.el-input__wrapper) {
+    background: rgba(30, 30, 60, 0.6) !important;
+    border: 1px solid rgba(139, 92, 246, 0.25) !important;
+    box-shadow: none !important;
+  }
+
+  :deep(.el-input__inner) {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 12px !important;
+  }
+}
+
+.share-tips-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: 8px;
+}
+
+.tips-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.5;
+}
+
+:deep(.el-divider) {
+  --el-divider-border-color: rgba(139, 92, 246, 0.15) !important;
+  margin: 8px 0 !important;
+}
+
+@media (max-width: 600px) {
+  .reward-stages {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stage-arrow {
+    justify-content: center;
+    padding: 0;
+    transform: rotate(90deg);
+  }
+
+  .option-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 900px) {

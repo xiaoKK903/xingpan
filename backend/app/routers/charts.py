@@ -3,12 +3,19 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 import json
+import logging
 
 from app.database import get_db
 from app.models import User, Chart
 from app.schemas import ChartCreate, ChartUpdate, ChartResponse, ApiResponse
 from app.routers.users import get_current_user
 from app.astro import calculate_chart, parse_birth_datetime
+from app.services.invite_service import (
+    get_invite_relation_by_invitee,
+    process_register_complete_reward
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["星盘存档"])
 
@@ -19,6 +26,13 @@ def save_chart(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    existing_charts = db.query(Chart).filter(
+        Chart.user_id == current_user.id,
+        Chart.is_deleted == False
+    ).count()
+    
+    is_first_chart = existing_charts == 0
+    
     dt = parse_birth_datetime(chart_data.birth_date, chart_data.birth_time)
     
     result = calculate_chart(
@@ -45,15 +59,45 @@ def save_chart(
     )
     
     db.add(chart)
+    db.flush()
+    
+    invite_reward_info = None
+    if is_first_chart:
+        invite_relation = get_invite_relation_by_invitee(db, current_user.id)
+        if invite_relation and not invite_relation.is_register_completed:
+            if invite_relation.is_valid:
+                success, message = process_register_complete_reward(db, invite_relation)
+                if success:
+                    logger.info(f"首次保存星盘，发放邀请完成奖励: user_id={current_user.id}, inviter_id={invite_relation.inviter_id}")
+                    invite_reward_info = {
+                        "inviter_reward": "1张星图盲盒券",
+                        "invitee_reward": "3天VIP会员体验",
+                        "success": True
+                    }
+                else:
+                    logger.warning(f"发放邀请完成奖励失败: {message}")
+                    invite_reward_info = {
+                        "success": False,
+                        "message": message
+                    }
+            else:
+                logger.info(f"邀请关系无效，跳过奖励: user_id={current_user.id}, reason={invite_relation.invalid_reason}")
+    
     db.commit()
     db.refresh(chart)
     
+    response_data = {
+        "id": chart.id,
+        "created_at": chart.created_at.isoformat(),
+        "is_first_chart": is_first_chart
+    }
+    
+    if invite_reward_info:
+        response_data["invite_reward"] = invite_reward_info
+    
     return ApiResponse(
         message="星盘保存成功",
-        data={
-            "id": chart.id,
-            "created_at": chart.created_at.isoformat()
-        }
+        data=response_data
     )
 
 

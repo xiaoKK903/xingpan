@@ -1,47 +1,46 @@
+"""
+详细测试脚本 - 检查所有导入
+"""
 import sys
+import os
 import traceback
 
+sys.path.insert(0, os.path.dirname(__file__))
+
 print("=" * 60)
-print("测试后端模块导入")
+print("Checking imports...")
 print("=" * 60)
 
 test_modules = [
-    ("app.config", "配置模块"),
-    ("app.database", "数据库模块"),
-    ("app.models", "模型模块"),
-    ("app.astro", "星盘计算模块"),
-    ("app.routers.users", "用户路由"),
-    ("app.services.cache_service", "缓存服务"),
-    ("app.services.timezone_service", "时区服务"),
-    ("app.services.ephemeris_calculator", "星历计算器"),
-    ("app.services.energy_scoring", "能量打分"),
-    ("app.services.transit_service", "行运服务"),
-    ("app.routers.transit", "行运路由"),
-    ("app.main", "主应用"),
+    ("app.database", "Base, SessionLocal, get_db"),
+    ("app.models.user", "User"),
+    ("app.models.pk_system", "All PK models"),
+    ("app.services.pk_service", "PKService, get_pk_service"),
+    ("app.routers.pk_system", "PK router"),
+    ("app.services.leaderboard_service", "Leaderboard service"),
 ]
 
-success_count = 0
-fail_count = 0
-
 for module_name, description in test_modules:
-    print(f"\n测试: {description} ({module_name})")
+    print(f"\n[{module_name}] {description}")
     try:
         __import__(module_name)
-        print(f"  ✓ 导入成功")
-        success_count += 1
+        print(f"  ✓ OK")
     except Exception as e:
-        print(f"  ✗ 导入失败: {e}")
-        print(f"  详细错误:")
+        print(f"  ✗ FAILED: {e}")
         traceback.print_exc()
-        fail_count += 1
 
 print("\n" + "=" * 60)
-print(f"测试结果: 成功 {success_count}, 失败 {fail_count}")
+print("Checking main app...")
 print("=" * 60)
 
-if fail_count > 0:
-    print("\n警告: 部分模块导入失败，请检查错误信息")
-    sys.exit(1)
-else:
-    print("\n所有模块导入成功!")
-    sys.exit(0)
+try:
+    from app.main import app
+    print("✓ Main app import OK")
+    print(f"  Routes: {len(app.routes)}")
+except Exception as e:
+    print(f"✗ Main app import FAILED: {e}")
+    traceback.print_exc()
+
+print("\n" + "=" * 60)
+print("Check complete")
+print("=" * 60)

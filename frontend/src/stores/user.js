@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { userApi, vipApi } from '@/api'
+import { userApi, vipApi, growthTasksApi } from '@/api'
 import router from '@/router'
 
 export const useUserStore = defineStore('user', () => {
@@ -8,6 +8,8 @@ export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
   const vipStatus = ref(null)
   const vipPrivileges = ref([])
+  const growthPopupData = ref(null)
+  const shouldShowGrowthPopup = ref(false)
 
   const isLoggedIn = computed(() => !!token.value && !!userInfo.value)
   const username = computed(() => userInfo.value?.username || '')
@@ -29,6 +31,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('token', response.access_token)
     
     await fetchVipStatus()
+    await checkGrowthPopup()
     
     return response
   }
@@ -44,6 +47,7 @@ export const useUserStore = defineStore('user', () => {
       
       if (token.value) {
         await fetchVipStatus()
+        await checkGrowthPopup()
       }
       
       return response
@@ -54,6 +58,32 @@ export const useUserStore = defineStore('user', () => {
       vipPrivileges.value = []
       localStorage.removeItem('token')
       throw error
+    }
+  }
+
+  async function checkGrowthPopup() {
+    if (!token.value) return
+    
+    try {
+      const response = await growthTasksApi.getPopupStatus()
+      growthPopupData.value = response
+      shouldShowGrowthPopup.value = response.should_show || false
+      console.log('成长任务弹窗状态:', response)
+    } catch (error) {
+      console.warn('获取成长任务弹窗状态失败:', error)
+      shouldShowGrowthPopup.value = false
+    }
+  }
+
+  async function markPopupSeen(isDismissed = false) {
+    try {
+      await growthTasksApi.markPopupSeen(isDismissed)
+      shouldShowGrowthPopup.value = false
+      if (growthPopupData.value) {
+        growthPopupData.value.has_seen = true
+      }
+    } catch (error) {
+      console.warn('标记弹窗已读失败:', error)
     }
   }
 
@@ -110,6 +140,8 @@ export const useUserStore = defineStore('user', () => {
     token,
     vipStatus,
     vipPrivileges,
+    growthPopupData,
+    shouldShowGrowthPopup,
     isLoggedIn,
     username,
     email,
@@ -124,6 +156,8 @@ export const useUserStore = defineStore('user', () => {
     login,
     register,
     getCurrentUser,
+    checkGrowthPopup,
+    markPopupSeen,
     fetchVipStatus,
     subscribeVip,
     cancelAutoRenew,

@@ -28,6 +28,10 @@
           <el-icon><User /></el-icon>
           <span>用户管理</span>
         </el-menu-item>
+        <el-menu-item index="/admin/topic-challenge">
+          <el-icon><Trophy /></el-icon>
+          <span>话题挑战</span>
+        </el-menu-item>
         <el-menu-item index="/admin/profile">
           <el-icon><Setting /></el-icon>
           <span>个人中心</span>
