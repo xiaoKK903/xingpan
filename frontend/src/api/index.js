@@ -45,7 +45,7 @@ request.interceptors.response.use(
   (response) => {
     const { data } = response
     if (data.code === 200 || data.code === 201) {
-      return data.data || data
+      return 'data' in data ? data.data : data
     }
     ElMessage.error(data.message || '请求失败')
     return Promise.reject(new Error(data.message || '请求失败'))

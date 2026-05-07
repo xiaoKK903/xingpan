@@ -1,13 +1,10 @@
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, UniqueConstraint, JSON, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from datetime import datetime
 
 from app.database import Base
-
-
-def _utc_now():
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now as _utc_now
 
 
 class PKMatchType(str, Enum):

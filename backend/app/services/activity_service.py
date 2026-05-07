@@ -2,7 +2,7 @@ import logging
 import json
 import uuid
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from enum import Enum
 
 from sqlalchemy.orm import Session
@@ -27,8 +27,7 @@ from app.models import (
 logger = logging.getLogger(__name__)
 
 
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now as _utc_now
 
 
 ZODIAC_DATE_RANGES = [

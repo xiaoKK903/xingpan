@@ -52,11 +52,17 @@ PLANET_INFO = {
     swe.URANUS: {"name": "天王星", "symbol": "♅", "ruler_of": ["水瓶座"]},
     swe.NEPTUNE: {"name": "海王星", "symbol": "♆", "ruler_of": ["双鱼座"]},
     swe.PLUTO: {"name": "冥王星", "symbol": "♇", "ruler_of": ["天蝎座"]},
+    swe.CERES: {"name": "谷神星", "symbol": "⚳", "ruler_of": []},
+    swe.PALLAS: {"name": "智神星", "symbol": "⚴", "ruler_of": []},
+    swe.JUNO: {"name": "婚神星", "symbol": "⚵", "ruler_of": []},
+    swe.VESTA: {"name": "灶神星", "symbol": "⚶", "ruler_of": []},
+    swe.CHIRON: {"name": "凯龙星", "symbol": "⚷", "ruler_of": []},
 }
 
 MAIN_PLANETS = [
     swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS,
-    swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO
+    swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO,
+    swe.CERES, swe.PALLAS, swe.JUNO, swe.VESTA, swe.CHIRON
 ]
 
 SE_FLAGS = swe.FLG_SWIEPH + swe.FLG_SPEED + swe.FLG_JPLEPH
@@ -305,13 +311,16 @@ def calculate_all_planets(jd: float, house_cusps: List[float]) -> List[Dict[str,
     return planets
 
 
+ASTEROID_PLANET_NAMES = {"谷神星", "智神星", "婚神星", "灶神星", "凯龙星"}
+
+
 def calculate_aspects(planets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ASPECT_TYPES = [
-        {"name": "合相", "symbol": "☌", "angle": 0, "orb": 8},
-        {"name": "六分相", "symbol": "⚹", "angle": 60, "orb": 6},
-        {"name": "四分相", "symbol": "□", "angle": 90, "orb": 8},
-        {"name": "三分相", "symbol": "△", "angle": 120, "orb": 8},
-        {"name": "对分相", "symbol": "☍", "angle": 180, "orb": 8},
+        {"name": "合相", "symbol": "☌", "angle": 0, "orb": 8, "asteroid_orb": 3},
+        {"name": "六分相", "symbol": "⚹", "angle": 60, "orb": 6, "asteroid_orb": 2},
+        {"name": "四分相", "symbol": "□", "angle": 90, "orb": 8, "asteroid_orb": 3},
+        {"name": "三分相", "symbol": "△", "angle": 120, "orb": 8, "asteroid_orb": 3},
+        {"name": "对分相", "symbol": "☍", "angle": 180, "orb": 8, "asteroid_orb": 3},
     ]
     
     aspects = []
@@ -327,7 +336,8 @@ def calculate_aspects(planets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             
             for aspect_type in ASPECT_TYPES:
                 angle = aspect_type["angle"]
-                orb = aspect_type["orb"]
+                is_asteroid_aspect = p1["name"] in ASTEROID_PLANET_NAMES or p2["name"] in ASTEROID_PLANET_NAMES
+                orb = aspect_type["asteroid_orb"] if is_asteroid_aspect else aspect_type["orb"]
                 
                 if abs(diff - angle) <= orb:
                     aspects.append({

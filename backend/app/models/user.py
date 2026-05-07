@@ -1,12 +1,8 @@
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, UniqueConstraint, JSON, Numeric
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, UniqueConstraint, Numeric, JSON, Enum as SAEnum
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from datetime import datetime
 from app.database import Base
-
-
-def _utc_now():
-    return datetime.now(timezone.utc)
 
 
 class User(Base):

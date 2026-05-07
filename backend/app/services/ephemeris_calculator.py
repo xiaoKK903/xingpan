@@ -31,6 +31,10 @@ class Planet(str, Enum):
     PLUTO = "pluto"
     NORTH_NODE = "north_node"
     CHIRON = "chiron"
+    CERES = "ceres"
+    PALLAS = "pallas"
+    JUNO = "juno"
+    VESTA = "vesta"
 
 
 PLANET_SWISSEPH_IDS = {
@@ -46,6 +50,10 @@ PLANET_SWISSEPH_IDS = {
     Planet.PLUTO: swe.PLUTO,
     Planet.NORTH_NODE: swe.TRUE_NODE,
     Planet.CHIRON: swe.CHIRON,
+    Planet.CERES: swe.CERES,
+    Planet.PALLAS: swe.PALLAS,
+    Planet.JUNO: swe.JUNO,
+    Planet.VESTA: swe.VESTA,
 }
 
 
@@ -64,6 +72,7 @@ ASPECT_DEFINITIONS = [
         "symbol": "☌",
         "angle": 0,
         "orb": 8,
+        "asteroid_orb": 3,
         "influence": 1.0,
         "nature": "neutral"
     },
@@ -73,6 +82,7 @@ ASPECT_DEFINITIONS = [
         "symbol": "⚹",
         "angle": 60,
         "orb": 6,
+        "asteroid_orb": 2,
         "influence": 0.7,
         "nature": "harmonious"
     },
@@ -82,6 +92,7 @@ ASPECT_DEFINITIONS = [
         "symbol": "□",
         "angle": 90,
         "orb": 8,
+        "asteroid_orb": 3,
         "influence": 1.0,
         "nature": "challenging"
     },
@@ -91,6 +102,7 @@ ASPECT_DEFINITIONS = [
         "symbol": "△",
         "angle": 120,
         "orb": 8,
+        "asteroid_orb": 3,
         "influence": 0.9,
         "nature": "harmonious"
     },
@@ -100,6 +112,7 @@ ASPECT_DEFINITIONS = [
         "symbol": "☍",
         "angle": 180,
         "orb": 8,
+        "asteroid_orb": 3,
         "influence": 1.0,
         "nature": "challenging"
     },
@@ -116,6 +129,8 @@ MOON_PHASES = [
     {"name": "下弦月", "symbol": "🌗", "angle": 270, "range": (270, 315)},
     {"name": "残月", "symbol": "🌘", "angle": 315, "range": (315, 360)},
 ]
+
+ASTEROID_PLANET_NAMES = {"谷神星", "智神星", "婚神星", "灶神星", "凯龙星"}
 
 
 class EphemerisCalculator:

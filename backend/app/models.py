@@ -2174,8 +2174,7 @@ class ZodiacSign(str, Enum):
     PISCES = "pisces"
 
 
-def _utc_now():
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now as _utc_now
 
 
 class Activity(Base):

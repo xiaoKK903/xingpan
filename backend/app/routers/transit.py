@@ -531,11 +531,13 @@ async def get_personal_trend(
 @router.get("/cache/status", response_model=ApiResponse)
 async def get_cache_status():
     """获取缓存服务状态"""
+    from app.redis_client import redis_manager
+    using_redis = redis_manager.get_client() is not None
     return ApiResponse(
         code=200,
         message="缓存状态获取成功",
         data={
-            "using_redis": cache_service.is_using_redis,
+            "using_redis": using_redis,
             "service_available": True
         }
     )
