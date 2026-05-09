@@ -55,7 +55,7 @@
 
                   <div class="form-group">
                     <label class="form-label">
-                      <span class="label-icon"><el-icon><Location /></el-icon></span>
+                      <span class="label-icon"><el-icon><MapLocation /></el-icon></span>
                       <span>出生城市</span>
                     </label>
 
@@ -757,7 +757,7 @@ import ChartWheel from '@/components/ChartWheel.vue'
 import ThreeAstroSphere from '@/components/ThreeAstroSphere.vue'
 import AIInterpretation from '@/components/AIInterpretation.vue'
 import { exportAsPNG, exportAsJPG, generateChartFilename, downloadBlob } from '@/utils/exportUtils'
-import { Download, CaretBottom, Loading } from '@element-plus/icons-vue'
+import { Download, CaretBottom, Loading, Star, User, MapLocation, Calendar, Clock, MagicStick } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()

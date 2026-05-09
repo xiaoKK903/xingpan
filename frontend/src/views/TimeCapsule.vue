@@ -386,6 +386,7 @@ const isVip = computed(() => userStore.isVip)
 
 const isCreateMode = computed(() => route.name === 'TimeCapsuleCreate')
 const isEditMode = computed(() => route.name === 'TimeCapsuleEdit')
+const isDetailMode = computed(() => route.name === 'TimeCapsuleDetail')
 
 const quotaPercentage = computed(() => {
   if (!quota.value || quota.value.total_available === 0) return 0
