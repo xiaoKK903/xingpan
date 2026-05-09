@@ -21,13 +21,13 @@ class Settings(BaseSettings):
     
     DATABASE_URL: str = "sqlite:///./ai_customer_service.db"
     SECRET_KEY: str = "your-secret-key-change-in-production"
-    帮我看下两个大模型的key是什么
+    # 帮我看下两个大模型的key是什么
     
-    先查找项目中与“大模型 key”相关的配置或环境变量。
+    # 先查找项目中与"大模型 key"相关的配置或环境变量。
     
-    在这个仓库里，两个大模型的 key 在 .env 里：
+    # 在这个仓库里，两个大模型的 key 在 .env 里：
     
-    DASHSCOPE_API_KEY=sk-556b657fe9d745539045879218f51920
+    # DASHSCOPE_API_KEY=sk-556b657fe9d745539045879218f51920
     
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7

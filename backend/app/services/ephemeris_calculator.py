@@ -6,6 +6,8 @@ from enum import Enum
 
 import swisseph as swe
 
+swe.set_ephe_path("")
+
 from app.config import settings
 from app.astro import (
     MAIN_PLANETS, PLANET_INFO, SE_FLAGS,
@@ -119,6 +121,9 @@ ASPECT_DEFINITIONS = [
 ]
 
 
+ASTEROID_PLANET_NAMES = {"谷神星", "智神星", "婚神星", "灶神星", "凯龙星"}
+
+
 MOON_PHASES = [
     {"name": "新月", "symbol": "🌑", "angle": 0, "range": (0, 45)},
     {"name": "蛾眉月", "symbol": "🌒", "angle": 45, "range": (45, 90)},
@@ -130,143 +135,111 @@ MOON_PHASES = [
     {"name": "残月", "symbol": "🌘", "angle": 315, "range": (315, 360)},
 ]
 
-ASTEROID_PLANET_NAMES = {"谷神星", "智神星", "婚神星", "灶神星", "凯龙星"}
-
 
 class EphemerisCalculator:
-    """
-    星历计算器 - 纯计算逻辑，与业务逻辑解耦
-    
-    职责：
-    - 计算行星位置
-    - 计算相位关系
-    - 计算月相
-    - 检测逆行
-    - 时区转换
-    """
-    
     def __init__(self):
         self._planet_cache: Dict[Tuple[float, int], Dict[str, Any]] = {}
         self._cache_hits = 0
         self._cache_misses = 0
-    
+
     def calculate_planet_position(
         self,
         jd: float,
         planet_id: int,
         use_cache: bool = True
     ) -> Dict[str, Any]:
-        """
-        计算单个行星在指定儒略日的位置
-        
-        Args:
-            jd: 儒略日
-            planet_id: 行星ID (swisseph 常量)
-            use_cache: 是否使用内存缓存
-            
-        Returns:
-            行星位置数据
-        """
-        cache_key = (round(jd, 8), planet_id)
-        
-        if use_cache and cache_key in self._planet_cache:
-            self._cache_hits += 1
-            return self._planet_cache[cache_key].copy()
-        
+        if use_cache:
+            cache_key = (jd, planet_id)
+            if cache_key in self._planet_cache:
+                self._cache_hits += 1
+                return self._planet_cache[cache_key]
+
         self._cache_misses += 1
         
-        result, ret_flag = swe.calc_ut(jd, planet_id, SE_FLAGS)
+        result = swe.calc_ut(jd, planet_id, SE_FLAGS)
         longitude = result[0]
-        latitude_planet = result[1]
+        latitude = result[1]
         speed = result[3]
-        
-        planet_info = PLANET_INFO.get(planet_id, {})
+
         zodiac_info = longitude_to_zodiac(longitude)
         
-        position = {
+        planet_info = PLANET_INFO.get(planet_id, {"name": "未知", "symbol": "★"})
+
+        position_data = {
             "planet_id": planet_id,
-            "name": planet_info.get("name", "未知"),
-            "symbol": planet_info.get("symbol", "★"),
-            "longitude": longitude,
-            "latitude": latitude_planet,
-            "speed": speed,
-            "is_retrograde": speed < 0,
-            "zodiac": zodiac_info
+            "name": planet_info["name"],
+            "symbol": planet_info["symbol"],
+            "longitude": round(longitude, 4),
+            "latitude": round(latitude, 4),
+            "speed": round(speed, 4),
+            "zodiac": zodiac_info,
+            "is_retrograde": speed < 0
         }
-        
+
         if use_cache:
-            self._planet_cache[cache_key] = position.copy()
-        
-        return position
-    
-    def calculate_multiple_planets(
+            self._planet_cache[cache_key] = position_data
+
+        return position_data
+
+    def calculate_houses(
         self,
         jd: float,
-        planet_ids: Optional[List[int]] = None,
-        include_north_node: bool = True,
-        include_chiron: bool = False
-    ) -> List[Dict[str, Any]]:
-        """
-        计算多个行星在指定儒略日的位置
-        
-        Args:
-            jd: 儒略日
-            planet_ids: 行星ID列表，默认使用 MAIN_PLANETS
-            include_north_node: 是否包含北交点
-            include_chiron: 是否包含凯龙星
+        latitude: float,
+        longitude: float,
+        house_system: str = "placidus"
+    ) -> Dict[str, Any]:
+        house_sys_char = 'P'
+        if house_system.lower() == "koch":
+            house_sys_char = 'K'
+        elif house_system.lower() == "equal":
+            house_sys_char = 'E'
+        elif house_system.lower() == "whole_sign":
+            asc_result = swe.houses(jd, latitude, longitude, 'P')
+            asc_longitude = asc_result[0][0]
+            sign_start_longitude = int(asc_longitude / 30) * 30
             
-        Returns:
-            行星位置列表
-        """
-        if planet_ids is None:
-            planet_ids = MAIN_PLANETS
-        
-        planets = []
-        
-        for planet_id in planet_ids:
-            planet = self.calculate_planet_position(jd, planet_id)
-            planets.append(planet)
-        
-        if include_north_node:
-            try:
-                node = self.calculate_planet_position(jd, swe.TRUE_NODE, use_cache=False)
-                node["name"] = "北交点"
-                node["symbol"] = "☊"
-                node["is_retrograde"] = False
-                planets.append(node)
-            except Exception as e:
-                logger.warning(f"计算北交点失败: {e}")
-        
-        if include_chiron:
-            try:
-                chiron = self.calculate_planet_position(jd, swe.CHIRON, use_cache=False)
-                chiron["name"] = "凯龙星"
-                chiron["symbol"] = "⚷"
-                planets.append(chiron)
-            except Exception as e:
-                logger.warning(f"计算凯龙星失败: {e}")
-        
-        return planets
-    
+            house_cusps = [(sign_start_longitude + i * 30) % 360 for i in range(13)]
+            house_cusps[0] = asc_longitude
+            
+            return {
+                "house_system": "whole_sign",
+                "ascendant_longitude": round(asc_longitude, 4),
+                "ascendant_zodiac": longitude_to_zodiac(asc_longitude),
+                "midheaven_longitude": round(house_cusps[9], 4),
+                "midheaven_zodiac": longitude_to_zodiac(house_cusps[9]),
+                "house_cusps": [round(c, 4) for c in house_cusps]
+            }
+
+        try:
+            result = swe.houses(jd, latitude, longitude, house_sys_char)
+            house_cusps = result[0]
+            asc_longitude = house_cusps[0]
+            mc_longitude = house_cusps[9]
+            
+            return {
+                "house_system": house_system,
+                "ascendant_longitude": round(asc_longitude, 4),
+                "ascendant_zodiac": longitude_to_zodiac(asc_longitude),
+                "midheaven_longitude": round(mc_longitude, 4),
+                "midheaven_zodiac": longitude_to_zodiac(mc_longitude),
+                "house_cusps": [round(c, 4) for c in house_cusps]
+            }
+        except Exception as e:
+            logger.error(f"宫位计算失败: {e}")
+            return {}
+
     def calculate_aspect(
         self,
         planet1_long: float,
         planet2_long: float,
-        aspect_def: Dict[str, Any]
+        aspect_def: Dict[str, Any],
+        planet1_name: str = "",
+        planet2_name: str = ""
     ) -> Optional[Dict[str, Any]]:
-        """
-        计算两个行星之间是否形成特定相位
-        
-        Args:
-            planet1_long: 行星1的经度
-            planet2_long: 行星2的经度
-            aspect_def: 相位定义
-            
-        Returns:
-            相位数据，如果不形成相位则返回 None
-        """
         angle = aspect_def["angle"]
-        orb = aspect_def["orb"]
+        
+        is_asteroid_aspect = planet1_name in ASTEROID_PLANET_NAMES or planet2_name in ASTEROID_PLANET_NAMES
+        orb = aspect_def.get("asteroid_orb", aspect_def["orb"]) if is_asteroid_aspect else aspect_def["orb"]
         
         diff = abs(planet1_long - planet2_long)
         if diff > 180:
@@ -288,7 +261,7 @@ class EphemerisCalculator:
             }
         
         return None
-    
+
     def calculate_all_aspects(
         self,
         planets1: List[Dict[str, Any]],
@@ -296,18 +269,6 @@ class EphemerisCalculator:
         aspect_defs: Optional[List[Dict[str, Any]]] = None,
         exclude_same_planet: bool = True
     ) -> List[Dict[str, Any]]:
-        """
-        计算两组行星之间的所有相位
-        
-        Args:
-            planets1: 第一组行星（如本命盘行星）
-            planets2: 第二组行星（如行运行星），如果为 None 则计算行星1内部的相位
-            aspect_defs: 相位定义列表，默认使用 ASPECT_DEFINITIONS
-            exclude_same_planet: 是否排除同一行星的相位比较
-            
-        Returns:
-            相位列表，按影响力排序
-        """
         if aspect_defs is None:
             aspect_defs = ASPECT_DEFINITIONS
         
@@ -323,9 +284,11 @@ class EphemerisCalculator:
                 
                 p1_long = p1["longitude"]
                 p2_long = p2["longitude"]
+                p1_name = p1.get("name", "")
+                p2_name = p2.get("name", "")
                 
                 for aspect_def in aspect_defs:
-                    aspect = self.calculate_aspect(p1_long, p2_long, aspect_def)
+                    aspect = self.calculate_aspect(p1_long, p2_long, aspect_def, p1_name, p2_name)
                     
                     if aspect:
                         aspect.update({
@@ -342,177 +305,94 @@ class EphemerisCalculator:
         
         aspects.sort(key=lambda x: x["influence"], reverse=True)
         return aspects
-    
+
     def calculate_moon_phase(self, jd: float) -> Dict[str, Any]:
-        """
-        计算指定儒略日的月相
+        sun_pos = swe.calc_ut(jd, swe.SUN, SE_FLAGS)
+        moon_pos = swe.calc_ut(jd, swe.MOON, SE_FLAGS)
         
-        Args:
-            jd: 儒略日
-            
-        Returns:
-            月相数据
-        """
-        sun_result, _ = swe.calc_ut(jd, swe.SUN, SE_FLAGS)
-        moon_result, _ = swe.calc_ut(jd, swe.MOON, SE_FLAGS)
+        sun_long = sun_pos[0]
+        moon_long = moon_pos[0]
         
-        sun_long = sun_result[0]
-        moon_long = moon_result[0]
+        diff = moon_long - sun_long
+        if diff < 0:
+            diff += 360
         
-        diff = (moon_long - sun_long) % 360
-        
-        current_phase = MOON_PHASES[0]
         for phase in MOON_PHASES:
-            if phase["range"][0] <= diff < phase["range"][1]:
-                current_phase = phase
-                break
+            start, end = phase["range"]
+            if start <= diff < end or (end == 360 and diff >= start):
+                return {
+                    "phase": phase["name"],
+                    "symbol": phase["symbol"],
+                    "angle": round(diff, 2),
+                    "illumination": round(min(100, (diff % 180) / 1.8), 2)
+                }
         
-        illumination = (1 - math.cos(math.radians(diff))) / 2 * 100
+        return {"phase": "新月", "symbol": "🌑", "angle": 0, "illumination": 0}
+
+    def local_time_to_julday(self, year: int, month: int, day: int, hour: int, minute: int, latitude: float, longitude: float) -> Tuple[float, Dict[str, Any]]:
+        local_dt = datetime(year, month, day, hour, minute)
         
-        moon_speed = moon_result[3]
-        avg_moon_speed = 13.18
-        next_full_moon_days = (180 - diff) / avg_moon_speed if diff < 180 else (180 - diff + 360) / avg_moon_speed
-        next_new_moon_days = (360 - diff) / avg_moon_speed
-        
-        is_full_moon = abs(diff - 180) < 5
-        is_new_moon = abs(diff) < 5 or abs(diff - 360) < 5
-        
-        return {
-            "phase_name": current_phase["name"],
-            "phase_symbol": current_phase["symbol"],
-            "sun_moon_angle": round(diff, 2),
-            "illumination": round(illumination, 1),
-            "is_waxing": diff < 180,
-            "is_full_moon": is_full_moon,
-            "is_new_moon": is_new_moon,
-            "next_full_moon_days": round(next_full_moon_days, 1),
-            "next_new_moon_days": round(next_new_moon_days, 1)
+        debug_info = {
+            "input_local": local_dt.strftime("%Y-%m-%d %H:%M"),
+            "latitude": latitude,
+            "longitude": longitude,
+            "timezone": None,
+            "offset_hours": None,
+            "is_dst": None,
+            "utc_time": None
         }
-    
-    def check_planet_retrograde(
-        self,
-        jd: float,
-        planet_id: int
-    ) -> Dict[str, Any]:
-        """
-        检测指定行星是否逆行
         
-        Args:
-            jd: 儒略日
-            planet_id: 行星ID
+        utc_dt = None
+        
+        try:
+            timezone_str = timezone_service.get_timezone(latitude, longitude)
+            debug_info["timezone"] = timezone_str
             
-        Returns:
-            逆行状态数据
-        """
-        result, _ = swe.calc_ut(jd, planet_id, SE_FLAGS)
-        speed = result[3]
+            if timezone_str:
+                tz = pytz.timezone(timezone_str)
+                
+                try:
+                    local_aware = tz.localize(local_dt, is_dst=None)
+                except pytz.NonExistentTimeError:
+                    local_aware = tz.localize(local_dt, is_dst=True)
+                except pytz.AmbiguousTimeError:
+                    local_aware = tz.localize(local_dt, is_dst=False)
+                
+                utc_dt = local_aware.astimezone(pytz.utc)
+                debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+                debug_info["is_dst"] = local_aware.tzinfo._dst != timedelta(0) if hasattr(local_aware.tzinfo, '_dst') else False
+                debug_info["offset_hours"] = local_aware.utcoffset().total_seconds() / 3600 if local_aware.utcoffset() else 0
+                
+        except Exception as e:
+            logger.warning(f"时区转换失败，使用默认UTC+8: {e}")
         
-        planet_info = PLANET_INFO.get(planet_id, {})
-        
-        return {
-            "planet_id": planet_id,
-            "planet_name": planet_info.get("name", "未知"),
-            "is_retrograde": speed < 0,
-            "speed": round(speed, 4),
-            "status": "逆行" if speed < 0 else "顺行"
-        }
-    
-    def check_mercury_retrograde(self, jd: float) -> Dict[str, Any]:
-        """检测水星逆行"""
-        return self.check_planet_retrograde(jd, swe.MERCURY)
-    
-    def check_venus_retrograde(self, jd: float) -> Dict[str, Any]:
-        """检测金星逆行"""
-        return self.check_planet_retrograde(jd, swe.VENUS)
-    
-    def check_mars_retrograde(self, jd: float) -> Dict[str, Any]:
-        """检测火星逆行"""
-        return self.check_planet_retrograde(jd, swe.MARS)
-    
-    def local_time_to_julday(
-        self,
-        year: int, month: int, day: int, hour: int, minute: int,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
-        timezone_str: Optional[str] = None
-    ) -> Tuple[float, Dict[str, Any]]:
-        """
-        将本地时间转换为儒略日
-        
-        Args:
-            year, month, day, hour, minute: 本地时间
-            latitude, longitude: 经纬度（用于自动检测时区）
-            timezone_str: 可选的时区字符串
-            
-        Returns:
-            (儒略日, 调试信息)
-        """
-        utc_dt, debug_info = timezone_service.local_to_utc(
-            year, month, day, hour, minute,
-            latitude, longitude, timezone_str
-        )
+        if utc_dt is None:
+            offset_hours = 8.0
+            utc_dt = local_dt - timedelta(hours=offset_hours)
+            debug_info["timezone"] = "Asia/Shanghai (fallback)"
+            debug_info["offset_hours"] = offset_hours
+            debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
         
         jd = utc_to_julday(utc_dt)
-        debug_info["julday"] = jd
-        
         return jd, debug_info
-    
-    def julday_to_local_time(
-        self,
-        jd: float,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
-        timezone_str: Optional[str] = None
-    ) -> Tuple[datetime, Dict[str, Any]]:
-        """
-        将儒略日转换为本地时间
-        
-        Args:
-            jd: 儒略日
-            latitude, longitude: 经纬度
-            timezone_str: 时区字符串
-            
-        Returns:
-            (本地时间, 调试信息)
-        """
-        year, month, day, hour = swe.revjul(jd, swe.GREG_CAL)
-        
-        total_hours = hour
-        hours = int(total_hours)
-        minutes = int((total_hours - hours) * 60)
-        seconds = int(((total_hours - hours) * 60 - minutes) * 60)
-        
-        utc_dt = datetime(int(year), int(month), int(day), hours, minutes, seconds)
-        
-        local_dt, debug_info = timezone_service.utc_to_local(
-            utc_dt, latitude, longitude, timezone_str
-        )
-        
-        return local_dt, debug_info
-    
-    def get_cache_stats(self) -> Dict[str, Any]:
-        """获取缓存统计信息"""
-        total = self._cache_hits + self._cache_misses
-        hit_rate = (self._cache_hits / total * 100) if total > 0 else 0
-        
+
+    def get_cache_stats(self) -> Dict[str, int]:
         return {
-            "cache_size": len(self._planet_cache),
-            "cache_hits": self._cache_hits,
-            "cache_misses": self._cache_misses,
-            "hit_rate_percent": round(hit_rate, 2)
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+            "total": self._cache_hits + self._cache_misses
         }
-    
+
     def clear_cache(self):
-        """清除缓存"""
         self._planet_cache.clear()
         self._cache_hits = 0
         self._cache_misses = 0
-        logger.info("行星位置缓存已清除")
 
 
-ephemeris_calculator = EphemerisCalculator()
-
+_ephemeris_calculator = None
 
 def get_ephemeris_calculator() -> EphemerisCalculator:
-    """获取星历计算器单例"""
-    return ephemeris_calculator
+    global _ephemeris_calculator
+    if _ephemeris_calculator is None:
+        _ephemeris_calculator = EphemerisCalculator()
+    return _ephemeris_calculator

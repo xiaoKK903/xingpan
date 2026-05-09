@@ -61,11 +61,14 @@ PLANET_INFO = {
 
 MAIN_PLANETS = [
     swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS,
-    swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO,
+    swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO
+]
+
+ASTEROID_PLANETS = [
     swe.CERES, swe.PALLAS, swe.JUNO, swe.VESTA, swe.CHIRON
 ]
 
-SE_FLAGS = swe.FLG_SWIEPH + swe.FLG_SPEED + swe.FLG_JPLEPH
+SE_FLAGS = swe.FLG_SWIEPH + swe.FLG_SPEED
 
 
 def degree_to_dms(degree: float) -> Dict[str, Any]:
@@ -270,6 +273,20 @@ def calculate_all_planets(jd: float, house_cusps: List[float]) -> List[Dict[str,
         planet_data["zodiac"] = zodiac_info
         planet_data["house"] = house
         planets.append(planet_data)
+    
+    for planet_id in ASTEROID_PLANETS:
+        try:
+            planet_data = calculate_planet_ut(jd, planet_id)
+            
+            zodiac_info = longitude_to_zodiac(planet_data["longitude"])
+            house = find_house_for_planet(planet_data["longitude"], house_cusps)
+            
+            planet_data["zodiac"] = zodiac_info
+            planet_data["house"] = house
+            planets.append(planet_data)
+        except Exception as e:
+            planet_info = PLANET_INFO.get(planet_id, {})
+            logger.warning(f"计算小行星 {planet_info.get('name', planet_id)} 失败(需要星历文件): {e}")
     
     try:
         result, ret_flag = swe.calc_ut(jd, swe.TRUE_NODE, SE_FLAGS)
