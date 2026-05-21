@@ -5,8 +5,15 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 import swisseph as swe
+import os as _os
 
-swe.set_ephe_path("")
+# 设置星历文件路径：优先使用项目 backend/ephe 目录
+_services_dir = _os.path.dirname(_os.path.abspath(__file__))
+_ephe_path = _os.path.join(_os.path.dirname(_services_dir), "ephe")
+if _os.path.isdir(_ephe_path):
+    swe.set_ephe_path(_ephe_path)
+else:
+    swe.set_ephe_path("")
 
 from app.config import settings
 from app.astro import (
@@ -61,9 +68,11 @@ PLANET_SWISSEPH_IDS = {
 
 class AspectType(str, Enum):
     CONJUNCTION = "conjunction"
+    SEMI_SEXTILE = "semi_sextile"
     SEXTILE = "sextile"
     SQUARE = "square"
     TRINE = "trine"
+    QUINCUNX = "quincunx"
     OPPOSITION = "opposition"
 
 
@@ -77,6 +86,16 @@ ASPECT_DEFINITIONS = [
         "asteroid_orb": 3,
         "influence": 1.0,
         "nature": "neutral"
+    },
+    {
+        "type": AspectType.SEMI_SEXTILE,
+        "name": "半六合",
+        "symbol": "⚺",
+        "angle": 30,
+        "orb": 3,
+        "asteroid_orb": 1,
+        "influence": 0.3,
+        "nature": "harmonious"
     },
     {
         "type": AspectType.SEXTILE,
@@ -107,6 +126,16 @@ ASPECT_DEFINITIONS = [
         "asteroid_orb": 3,
         "influence": 0.9,
         "nature": "harmonious"
+    },
+    {
+        "type": AspectType.QUINCUNX,
+        "name": "梅花相",
+        "symbol": "⚻",
+        "angle": 150,
+        "orb": 3,
+        "asteroid_orb": 1,
+        "influence": 0.4,
+        "nature": "challenging"
     },
     {
         "type": AspectType.OPPOSITION,
@@ -196,17 +225,18 @@ class EphemerisCalculator:
         elif house_system.lower() == "whole_sign":
             asc_result = swe.houses(jd, latitude, longitude, 'P')
             asc_longitude = asc_result[0][0]
+            mc_longitude = asc_result[1][1] if len(asc_result[1]) > 1 else None
             sign_start_longitude = int(asc_longitude / 30) * 30
-            
-            house_cusps = [(sign_start_longitude + i * 30) % 360 for i in range(13)]
-            house_cusps[0] = asc_longitude
-            
+
+            # 整宫制：每个宫位30°，从上升星座的0°开始
+            house_cusps = [(sign_start_longitude + i * 30) % 360 for i in range(12)]
+
             return {
                 "house_system": "whole_sign",
                 "ascendant_longitude": round(asc_longitude, 4),
                 "ascendant_zodiac": longitude_to_zodiac(asc_longitude),
-                "midheaven_longitude": round(house_cusps[9], 4),
-                "midheaven_zodiac": longitude_to_zodiac(house_cusps[9]),
+                "midheaven_longitude": round(mc_longitude, 4) if mc_longitude is not None else None,
+                "midheaven_zodiac": longitude_to_zodiac(mc_longitude) if mc_longitude is not None else None,
                 "house_cusps": [round(c, 4) for c in house_cusps]
             }
 
@@ -345,7 +375,7 @@ class EphemerisCalculator:
         utc_dt = None
         
         try:
-            timezone_str = timezone_service.get_timezone(latitude, longitude)
+            timezone_str = timezone_service.get_timezone_from_coords(latitude, longitude)
             debug_info["timezone"] = timezone_str
             
             if timezone_str:
@@ -360,7 +390,7 @@ class EphemerisCalculator:
                 
                 utc_dt = local_aware.astimezone(pytz.utc)
                 debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
-                debug_info["is_dst"] = local_aware.tzinfo._dst != timedelta(0) if hasattr(local_aware.tzinfo, '_dst') else False
+                debug_info["is_dst"] = local_aware.dst() is not None and local_aware.dst() != timedelta(0)
                 debug_info["offset_hours"] = local_aware.utcoffset().total_seconds() / 3600 if local_aware.utcoffset() else 0
                 
         except Exception as e:
@@ -375,6 +405,18 @@ class EphemerisCalculator:
         
         jd = utc_to_julday(utc_dt)
         return jd, debug_info
+
+    def check_mercury_retrograde(self, jd: float) -> Dict[str, Any]:
+        """检测水星是否逆行"""
+        position = self.calculate_planet_position(jd, swe.MERCURY)
+        is_retro = position["speed"] < 0
+        return {
+            "is_retrograde": is_retro,
+            "speed": position["speed"],
+            "status": "逆行中" if is_retro else "顺行中",
+            "longitude": position["longitude"],
+            "zodiac": position["zodiac"]
+        }
 
     def get_cache_stats(self) -> Dict[str, int]:
         return {

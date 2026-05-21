@@ -2,19 +2,21 @@ from enum import Enum
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
+import math
 import swisseph as swe
+import os
+
+# 设置星历文件路径：优先使用项目 backend/ephe 目录
+_astro_dir = os.path.dirname(os.path.abspath(__file__))
+_ephe_path = os.path.join(os.path.dirname(_astro_dir), "ephe")
+if os.path.isdir(_ephe_path):
+    swe.set_ephe_path(_ephe_path)
+else:
+    swe.set_ephe_path("")
 
 logger = logging.getLogger(__name__)
 
-try:
-    from timezonefinder import TimezoneFinder
-    import pytz
-    TZ_AVAILABLE = True
-    tf = TimezoneFinder()
-except ImportError as e:
-    logger.warning(f"时区库未安装: {e}")
-    TZ_AVAILABLE = False
-    tf = None
+# timezone_service is lazy-imported inside local_to_utc() to avoid circular imports
 
 
 class HouseSystem(str, Enum):
@@ -117,68 +119,51 @@ def find_house_for_planet(planet_longitude: float, house_cusps: List[float]) -> 
 
 
 def get_timezone_from_coords(latitude: float, longitude: float) -> Optional[str]:
-    if not TZ_AVAILABLE or tf is None:
-        return None
-    
-    try:
-        timezone_str = tf.timezone_at(lat=latitude, lng=longitude)
-        return timezone_str
-    except Exception as e:
-        logger.warning(f"获取时区失败: {e}")
-        return None
+    from app.services.timezone_service import get_timezone_service
+    return get_timezone_service().get_timezone_from_coords(latitude, longitude)
 
 
 def local_to_utc(
     year: int, month: int, day: int, hour: int, minute: int,
-    latitude: float, longitude: float
+    latitude: float, longitude: float,
+    use_true_solar_time: bool = False
 ) -> Tuple[datetime, Dict[str, Any]]:
-    local_dt = datetime(year, month, day, hour, minute)
-    
-    debug_info = {
-        "input_local": local_dt.strftime("%Y-%m-%d %H:%M"),
-        "latitude": latitude,
-        "longitude": longitude,
-        "timezone": None,
-        "offset_hours": None,
-        "is_dst": None,
-        "utc_time": None
-    }
-    
-    utc_dt = None
-    
-    if TZ_AVAILABLE and tf is not None:
-        try:
-            timezone_str = tf.timezone_at(lat=latitude, lng=longitude)
-            debug_info["timezone"] = timezone_str
-            
-            if timezone_str:
+    from app.services.timezone_service import get_timezone_service
+    ts = get_timezone_service()
+    utc_dt, debug_info = ts.local_to_utc(year, month, day, hour, minute, latitude, longitude)
+
+    if use_true_solar_time:
+        jd_for_eot = utc_to_julday(utc_dt)
+        eot_minutes = calculate_equation_of_time(jd_for_eot)
+        offset_hours = debug_info.get("offset_hours", 8.0)
+        timezone_str = debug_info.get("timezone")
+        standard_meridian = offset_hours * 15.0
+        longitude_correction = (longitude - standard_meridian) * 4.0
+        total_correction = eot_minutes + longitude_correction
+        debug_info["eot_minutes"] = round(eot_minutes, 2)
+        debug_info["longitude_correction_minutes"] = round(longitude_correction, 2)
+        debug_info["true_solar_correction_minutes"] = round(total_correction, 2)
+        local_dt = datetime(year, month, day, hour, minute)
+        corrected_local = local_dt + timedelta(minutes=total_correction)
+        debug_info["true_solar_time"] = corrected_local.strftime("%Y-%m-%d %H:%M")
+        if timezone_str and ts.is_available():
+            try:
+                import pytz
                 tz = pytz.timezone(timezone_str)
-                
                 try:
-                    local_aware = tz.localize(local_dt, is_dst=None)
-                except pytz.NonExistentTimeError:
-                    local_aware = tz.localize(local_dt, is_dst=True)
-                except pytz.AmbiguousTimeError:
-                    local_aware = tz.localize(local_dt, is_dst=False)
-                
-                utc_dt = local_aware.astimezone(pytz.utc)
+                    local_aware_corr = tz.localize(corrected_local, is_dst=None)
+                except (pytz.NonExistentTimeError, pytz.AmbiguousTimeError):
+                    local_aware_corr = tz.localize(corrected_local, is_dst=False)
+                utc_dt = local_aware_corr.astimezone(pytz.utc)
+                utc_dt = utc_dt.replace(tzinfo=None)
                 debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
-                debug_info["is_dst"] = local_aware.tzinfo._dst != timedelta(0) if hasattr(local_aware.tzinfo, '_dst') else False
-                debug_info["offset_hours"] = local_aware.utcoffset().total_seconds() / 3600 if local_aware.utcoffset() else 0
-                
-                logger.info(f"时区转换: {local_dt} ({timezone_str}) -> UTC {utc_dt}, 偏移: {debug_info['offset_hours']}小时, DST: {debug_info['is_dst']}")
-                
-        except Exception as e:
-            logger.warning(f"时区转换失败，使用默认UTC+8: {e}")
-    
-    if utc_dt is None:
-        offset_hours = 8.0
-        utc_dt = local_dt - timedelta(hours=offset_hours)
-        debug_info["timezone"] = "Asia/Shanghai (fallback)"
-        debug_info["offset_hours"] = offset_hours
-        debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
-        logger.warning(f"使用默认时区UTC+8: {local_dt} -> UTC {utc_dt}")
-    
+            except Exception:
+                utc_dt = corrected_local - timedelta(hours=offset_hours)
+                debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            utc_dt = corrected_local - timedelta(hours=offset_hours)
+            debug_info["utc_time"] = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+
     return utc_dt, debug_info
 
 
@@ -187,10 +172,86 @@ def utc_to_julday(utc_dt: datetime) -> float:
     month = utc_dt.month
     day = utc_dt.day
     hour = utc_dt.hour + utc_dt.minute / 60.0 + utc_dt.second / 3600.0
-    
+
     jd = swe.julday(year, month, day, hour)
     logger.info(f"UTC时间 {utc_dt} 转换为儒略日: {jd}")
     return jd
+
+
+def calculate_equation_of_time(jd_ut: float) -> float:
+    """
+    计算真太阳时与平太阳时的差值 (Equation of Time)
+
+    使用 Swiss Ephemeris 计算，返回值的单位是分钟。
+    正值表示真太阳时比平太阳时快（真太阳在前），
+    负值表示真太阳时比平太阳时慢。
+
+    公式: True Solar Time = Mean Solar Time + EoT
+    """
+    try:
+        eq = swe.time_equ(jd_ut)
+        # swe.time_equ returns days as float (some wrappers return (float,))
+        if isinstance(eq, (tuple, list)):
+            eot_minutes = eq[0] * 1440
+        else:
+            eot_minutes = eq * 1440
+        return eot_minutes
+    except AttributeError:
+        # swisseph 版本不支持 time_equ，使用近似公式计算
+        # γ = 2π/365 × (day_of_year - 1 + hour_adjustment)
+        try:
+            # 获取太阳位置用于精确计算
+            sun_pos = swe.calc_ut(jd_ut, swe.SUN, swe.FLG_SWIEPH)
+            sun_longitude = sun_pos[0]
+
+            # 太阳平近点角近似
+            n = sun_longitude - 282.94
+            if n < 0:
+                n += 360
+
+            # EoT 近似公式 (分钟)
+            eot_minutes = (-1.915 * math.sin(math.radians(n))
+                          - 0.020 * math.sin(math.radians(2 * n)))
+            return eot_minutes
+        except Exception:
+            logger.warning("无法计算真太阳时")
+            return 0.0
+
+
+def apply_true_solar_time(
+    local_dt: datetime,
+    jd_ut: float,
+    longitude: float,
+    timezone_offset: float
+) -> Tuple[datetime, float]:
+    """
+    将平太阳时（标准时间）校正为真太阳时（视太阳时）
+
+    中国古法命理（八字、紫微斗数）要求使用真太阳时校正出生时间。
+    校正量 = 时差(EoT) + 经度校正
+
+    Args:
+        local_dt: 本地标准时间
+        jd_ut: 对应的儒略日 (UT)
+        longitude: 当地经度
+        timezone_offset: 时区偏移（小时）
+
+    Returns:
+        (校正后的本地时间, 校正总量(分钟))
+    """
+    # 1. 经度校正: 当地经度与标准子午线的差值 × 4 分钟/度
+    standard_meridian = timezone_offset * 15.0
+    longitude_correction = (longitude - standard_meridian) * 4.0
+
+    # 2. 真太阳时差 (Equation of Time)
+    eot_minutes = calculate_equation_of_time(jd_ut)
+
+    # 3. 总校正量
+    total_correction = eot_minutes + longitude_correction
+
+    corrected_dt = local_dt + timedelta(minutes=total_correction)
+
+    return corrected_dt, total_correction
 
 
 def calculate_planet_ut(jd: float, planet_id: int) -> Dict[str, Any]:
@@ -219,15 +280,14 @@ def calculate_houses_ex(
     if house_system == HouseSystem.WHOLE_SIGN.value:
         houses, ascmc = swe.houses_ex(jd, latitude, longitude, b'P', 0)
         ascendant_longitude = ascmc[0]
-        
+
         asc_sign = int(ascendant_longitude / 30)
-        
-        house_cusps = []
-        for i in range(12):
-            house_sign = (asc_sign + i) % 12
-            cusp_longitude = house_sign * 30.0
-            house_cusps.append(cusp_longitude)
-        
+
+        # 整宫制：每个宫位正好30°，第1宫从上升星座的0°开始
+        # house_cusps[0]=asc_sign*30°, [1]=next_sign*30°, ..., [11]=prev_sign*30°
+        cusp_start = asc_sign * 30.0
+        house_cusps = [(cusp_start + i * 30) % 360 for i in range(12)]
+
         return {
             "system": HouseSystem.WHOLE_SIGN.value,
             "house_cusps": house_cusps,
@@ -243,9 +303,9 @@ def calculate_houses_ex(
         }
     else:
         houses, ascmc = swe.houses_ex(jd, latitude, longitude, b'P', 0)
-        
-        house_cusps = list(houses)
-        
+
+        house_cusps = list(houses[:12])
+
         return {
             "system": HouseSystem.PLACIDUS.value,
             "house_cusps": house_cusps,
@@ -295,16 +355,17 @@ def calculate_all_planets(jd: float, house_cusps: List[float]) -> List[Dict[str,
         zodiac_info = longitude_to_zodiac(longitude)
         house = find_house_for_planet(longitude, house_cusps)
         
+        north_speed = result[3]
         planets.append({
             "planet_id": swe.TRUE_NODE,
             "name": "北交点",
             "symbol": "☊",
             "longitude": longitude,
             "latitude": 0,
-            "speed": result[3],
+            "speed": north_speed,
             "zodiac": zodiac_info,
             "house": house,
-            "is_retrograde": False
+            "is_retrograde": north_speed < 0
         })
         
         south_longitude = (longitude + 180) % 360
@@ -317,10 +378,10 @@ def calculate_all_planets(jd: float, house_cusps: List[float]) -> List[Dict[str,
             "symbol": "☋",
             "longitude": south_longitude,
             "latitude": 0,
-            "speed": -result[3],
+            "speed": north_speed,
             "zodiac": south_zodiac,
             "house": south_house,
-            "is_retrograde": False
+            "is_retrograde": north_speed < 0
         })
     except Exception as e:
         logger.warning(f"计算交点失败: {e}")
@@ -331,32 +392,58 @@ def calculate_all_planets(jd: float, house_cusps: List[float]) -> List[Dict[str,
 ASTEROID_PLANET_NAMES = {"谷神星", "智神星", "婚神星", "灶神星", "凯龙星"}
 
 
+def is_aspect_applying(p1_longitude: float, p1_speed: float,
+                       p2_longitude: float, p2_speed: float,
+                       current_diff: float, exact_angle: float) -> bool:
+    """判断相位是入相位(applying)还是出相位(separating)。
+
+    计算一个极短时间后的角距离变化，如果轨道在缩小则为入相位。
+    """
+    dt = 0.01
+    f1 = p1_longitude + p1_speed * dt
+    f2 = p2_longitude + p2_speed * dt
+    future_diff = abs(f1 - f2)
+    if future_diff > 180:
+        future_diff = 360 - future_diff
+
+    current_orb = abs(current_diff - exact_angle)
+    future_orb = abs(future_diff - exact_angle)
+    return future_orb < current_orb
+
+
 def calculate_aspects(planets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ASPECT_TYPES = [
         {"name": "合相", "symbol": "☌", "angle": 0, "orb": 8, "asteroid_orb": 3},
+        {"name": "半六合", "symbol": "⚺", "angle": 30, "orb": 3, "asteroid_orb": 1},
         {"name": "六分相", "symbol": "⚹", "angle": 60, "orb": 6, "asteroid_orb": 2},
         {"name": "四分相", "symbol": "□", "angle": 90, "orb": 8, "asteroid_orb": 3},
         {"name": "三分相", "symbol": "△", "angle": 120, "orb": 8, "asteroid_orb": 3},
+        {"name": "梅花相", "symbol": "⚻", "angle": 150, "orb": 3, "asteroid_orb": 1},
         {"name": "对分相", "symbol": "☍", "angle": 180, "orb": 8, "asteroid_orb": 3},
     ]
-    
+
     aspects = []
-    
+
     for i in range(len(planets)):
         for j in range(i + 1, len(planets)):
             p1 = planets[i]
             p2 = planets[j]
-            
+
             diff = abs(p1["longitude"] - p2["longitude"])
             if diff > 180:
                 diff = 360 - diff
-            
+
             for aspect_type in ASPECT_TYPES:
                 angle = aspect_type["angle"]
                 is_asteroid_aspect = p1["name"] in ASTEROID_PLANET_NAMES or p2["name"] in ASTEROID_PLANET_NAMES
                 orb = aspect_type["asteroid_orb"] if is_asteroid_aspect else aspect_type["orb"]
-                
+
                 if abs(diff - angle) <= orb:
+                    applying = is_aspect_applying(
+                        p1["longitude"], p1.get("speed", 0),
+                        p2["longitude"], p2.get("speed", 0),
+                        diff, angle
+                    )
                     aspects.append({
                         "planet1": p1["name"],
                         "planet1_symbol": p1["symbol"],
@@ -367,10 +454,10 @@ def calculate_aspects(planets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                         "angle": angle,
                         "actual_angle": round(diff, 4),
                         "orb": round(abs(diff - angle), 4),
-                        "is_applying": None
+                        "is_applying": applying
                     })
                     break
-    
+
     return aspects
 
 
@@ -382,7 +469,8 @@ def calculate_chart(
     minute: int = 0,
     latitude: float = 39.9,
     longitude: float = 116.4,
-    house_system: str = HouseSystem.PLACIDUS.value
+    house_system: str = HouseSystem.PLACIDUS.value,
+    use_true_solar_time: bool = False
 ) -> Dict[str, Any]:
     logger.info(f"""
 ========== 星盘计算开始 ==========
@@ -394,7 +482,7 @@ def calculate_chart(
 ====================================
     """)
     
-    utc_dt, timezone_info = local_to_utc(year, month, day, hour, minute, latitude, longitude)
+    utc_dt, timezone_info = local_to_utc(year, month, day, hour, minute, latitude, longitude, use_true_solar_time=use_true_solar_time)
     jd = utc_to_julday(utc_dt)
     
     houses_result = calculate_houses_ex(jd, latitude, longitude, house_system)

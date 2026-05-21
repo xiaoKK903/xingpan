@@ -25,24 +25,8 @@
         </filter>
       </defs>
 
-      <!-- 最外层背景 -->
-      <circle :cx="CX" :cy="CY" :r="R + 35" fill="#000" />
-      
-      <!-- 外圈刻度圆环 -->
-      <circle :cx="CX" :cy="CY" :r="R + 30" fill="none" stroke="#222" stroke-width="20"/>
-      
-      <!-- 外圈刻度线 -->
-      <g v-for="i in 360" :key="'tick-'+i">
-        <line
-          v-if="i % 15 === 0"
-          :x1="pol(R + 22, i).x" :y1="pol(R + 22, i).y"
-          :x2="pol(R + 26, i).x" :y2="pol(R + 26, i).y"
-          stroke="#333" stroke-width="0.5"
-        />
-      </g>
-      
-      <!-- 主盘背景 -->
-      <circle :cx="CX" :cy="CY" :r="R" fill="#000" stroke="#333" stroke-width="2"/>
+      <!-- 主盘背景（覆盖到最外层文字） -->
+      <circle :cx="CX" :cy="CY" :r="R + 35" fill="#000"/>
 
       <!-- 中心小圆 -->
       <circle :cx="CX" :cy="CY" r="2" fill="#666" stroke="#888" stroke-width="1"/>
@@ -200,18 +184,8 @@
                 </filter>
               </defs>
 
-              <circle :cx="CX" :cy="CY" :r="R + 35" fill="#000" />
-              <circle :cx="CX" :cy="CY" :r="R + 30" fill="none" stroke="#222" stroke-width="20"/>
-              <!-- 外圈刻度线 -->
-              <g v-for="i in 360" :key="'modal-tick-'+i">
-                <line
-                  v-if="i % 15 === 0"
-                  :x1="pol(R + 22, i).x" :y1="pol(R + 22, i).y"
-                  :x2="pol(R + 26, i).x" :y2="pol(R + 26, i).y"
-                  stroke="#333" stroke-width="0.5"
-                />
-              </g>
-              <circle :cx="CX" :cy="CY" :r="R" fill="#000" stroke="#333" stroke-width="2"/>
+              <!-- 主盘背景（覆盖到最外层文字） -->
+              <circle :cx="CX" :cy="CY" :r="R + 35" fill="#000"/>
 
               <!-- 中心小圆 -->
               <circle :cx="CX" :cy="CY" r="2" fill="#666" stroke="#888" stroke-width="1"/>
@@ -423,11 +397,13 @@ const ASPECT_INFO = {
   '对分相': { color: '#ff6b6b', width: 2, dash: 'none', opacity: 0.8 },
   '四分相': { color: '#ff6b6b', width: 2, dash: 'none', opacity: 0.8 },
   '三分相': { color: '#77dd77', width: 2, dash: 'none', opacity: 0.75 },
-  '六分相': { color: '#4ecdc4', width: 1.8, dash: 'none', opacity: 0.7 }
+  '六分相': { color: '#4ecdc4', width: 1.8, dash: 'none', opacity: 0.7 },
+  '半六合': { color: '#87ceeb', width: 1.2, dash: '4,3', opacity: 0.45 },
+  '梅花相': { color: '#dda0dd', width: 1.2, dash: '4,3', opacity: 0.45 }
 }
 
 const MAJOR_PLANETS = ['太阳', '月亮', '水星', '金星', '火星', '木星', '土星', '天王星', '海王星', '冥王星', '北交点', '南交点', '婚神星', '天顶', '福点']
-const MAJOR_ASPECTS = ['合相', '对分相', '四分相', '三分相', '六分相']
+const MAJOR_ASPECTS = ['合相', '对分相', '四分相', '三分相', '六分相', '半六合', '梅花相']
 
 const ready = computed(() => props.chartData?.planets?.length > 0)
 
@@ -436,9 +412,18 @@ const rawPlanets = computed(() => props.chartData?.planets || [])
 const houses = computed(() => {
   const h = props.chartData?.houses
   if (!h) return defHouses()
+  // houses 是 {system, house_cusps: [...], houses: [...], ascendant, midheaven} 字典
   if (!Array.isArray(h)) {
+    const cusps = h.house_cusps || h.cusps || []
+    if (cusps.length >= 12) {
+      return cusps.slice(0, 12).map(c => ({ cusp: typeof c === 'number' ? c : (c.longitude || c.cusp || 0) }))
+    }
+    // 兼容旧格式：h[1]~h[12] 数值键
     const arr = []
-    for (let i = 1; i <= 12; i++) arr.push({ cusp: h[i] || (i - 1) * 30 })
+    for (let i = 1; i <= 12; i++) {
+      const val = h[i]
+      arr.push({ cusp: typeof val === 'number' ? val : (val?.cusp || val?.longitude || (i - 1) * 30) })
+    }
     return arr
   }
   return h.map((v, i) => typeof v === 'object' && v.cusp != null ? v : { cusp: v || i * 30 })

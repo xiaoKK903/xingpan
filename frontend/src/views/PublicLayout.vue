@@ -11,132 +11,41 @@
             <span class="logo-text">星盘查询系统</span>
           </router-link>
           <div class="nav-links">
-            <router-link 
-              to="/astro" 
+            <router-link
+              to="/astro"
               class="nav-link"
               :class="{ active: route.path === '/astro' }"
             >
               单人星盘
             </router-link>
-            <router-link 
-              to="/synastry" 
+            <router-link
+              to="/synastry"
               class="nav-link"
               :class="{ active: route.path === '/synastry' }"
             >
               双人合盘
             </router-link>
-            <router-link 
-              to="/horoscope" 
+            <router-link
+              to="/horoscope"
               class="nav-link"
               :class="{ active: route.path === '/horoscope' }"
             >
-              每日星运
+              每日状态参考
             </router-link>
-            <router-link 
-              to="/transit" 
+            <router-link
+              to="/transit"
               class="nav-link"
               :class="{ active: route.path === '/transit' }"
             >
-              星象气象
+              行运气象
             </router-link>
-            <router-link 
-              to="/social-plaza" 
+            <router-link
+              to="/report-shop"
               class="nav-link"
-              :class="{ active: route.path === '/social-plaza' }"
+              :class="{ active: route.path === '/report-shop' }"
             >
-              ✨ 星光广场
+              星盘报告
             </router-link>
-            
-            <el-dropdown trigger="click" class="more-dropdown">
-              <span class="nav-link more-link">
-                更多
-                <el-icon class="arrow-icon"><ArrowDown /></el-icon>
-              </span>
-              <template #dropdown>
-                <el-dropdown-menu class="custom-dropdown-menu">
-                  <router-link to="/star-resonance" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>星能共鸣</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/plaza" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>平行人生</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/boss-hall" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>副本大厅</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/element-quest" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>星图盲盒</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/topic-challenge" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>🔥 话题挑战</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/leaderboards" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>🏆 排行榜</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/daily-cp-match" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>💕 今日CP</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <el-dropdown-item divided>
-                    <router-link to="/social-icebreaker" style="text-decoration: none; color: inherit;">
-                      <span>社交破冰</span>
-                    </router-link>
-                  </el-dropdown-item>
-                  <router-link to="/group-matrix" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>群组分析</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/life-script" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>人生剧本</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/workbench" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>占星师工作台</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/time-capsule" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>💫 时间胶囊</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <router-link to="/past-life" class="dropdown-nav-link">
-                    <el-dropdown-item>
-                      <span>🌙 前世故事</span>
-                    </el-dropdown-item>
-                  </router-link>
-                  <el-dropdown-item divided>
-                    <router-link to="/gift-shop" style="text-decoration: none; color: inherit;">
-                      <span>🎁 礼物商城</span>
-                    </router-link>
-                  </el-dropdown-item>
-                  <el-dropdown-item>
-                    <router-link to="/report-shop" style="text-decoration: none; color: inherit;">
-                      <span>📄 星盘报告</span>
-                    </router-link>
-                  </el-dropdown-item>
-                  <el-dropdown-item>
-                    <router-link to="/vip-center" style="text-decoration: none; color: inherit;">
-                      <span>⭐ 星钻会员</span>
-                    </router-link>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
           </div>
         </div>
         <div class="header-right">
@@ -172,10 +81,6 @@
                 <el-dropdown-menu class="custom-dropdown-menu">
                   <el-dropdown-item command="admin">后台管理</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-                  <el-dropdown-item command="invite">🎁 邀请好友</el-dropdown-item>
-                  <el-dropdown-item command="vip">⭐ 星钻会员</el-dropdown-item>
-                  <el-dropdown-item command="gifts">🎁 礼物商城</el-dropdown-item>
-                  <el-dropdown-item command="reports">📄 星盘报告</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -213,11 +118,6 @@
                 <el-dropdown-menu class="custom-dropdown-menu">
                   <el-dropdown-item command="charts">我的星盘</el-dropdown-item>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-                  <el-dropdown-item command="timeCapsule">💫 时间胶囊</el-dropdown-item>
-                  <el-dropdown-item command="invite">🎁 邀请好友</el-dropdown-item>
-                  <el-dropdown-item command="vip">⭐ 星钻会员</el-dropdown-item>
-                  <el-dropdown-item command="gifts">🎁 礼物商城</el-dropdown-item>
-                  <el-dropdown-item command="reports">📄 星盘报告</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -328,10 +228,6 @@ function goToProfile() {
   router.push('/profile')
 }
 
-function goToInvite() {
-  router.push('/invite')
-}
-
 function handleCommand(command) {
   switch (command) {
     case 'admin':
@@ -342,21 +238,6 @@ function handleCommand(command) {
       break
     case 'profile':
       router.push('/profile')
-      break
-    case 'timeCapsule':
-      router.push('/time-capsule')
-      break
-    case 'invite':
-      router.push('/invite')
-      break
-    case 'vip':
-      router.push('/vip-center')
-      break
-    case 'gifts':
-      router.push('/gift-shop')
-      break
-    case 'reports':
-      router.push('/report-shop')
       break
     case 'logout':
       userStore.logout()
@@ -574,38 +455,6 @@ onMounted(() => {
 :deep(.el-dropdown-menu__item) {
   &.el-dropdown-menu__item--divided {
     border-top-color: rgba(139, 92, 246, 0.2);
-  }
-}
-
-.more-dropdown {
-  .more-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    
-    .arrow-icon {
-      font-size: 12px;
-      transition: transform 0.3s ease;
-    }
-  }
-  
-  &:hover .more-link .arrow-icon {
-    transform: rotate(180deg);
-  }
-}
-
-.dropdown-nav-link {
-  text-decoration: none;
-  color: inherit;
-  
-  :deep(.el-dropdown-menu__item) {
-    padding: 0;
-    
-    span {
-      display: block;
-      padding: 10px 20px;
-    }
   }
 }
 
