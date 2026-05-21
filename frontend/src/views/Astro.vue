@@ -779,7 +779,7 @@ const showExportMenu = ref(false)
 const selectedExportFormat = ref('png_hd')
 const selectedReportTemplate = ref('detailed')
 
-const use3DChart = ref(true)
+const use3DChart = ref(false)
 
 const exportFormats = [
   { id: 'png_hd', name: '高清 PNG', format: 'png', scale: 3, description: '3倍分辨率' },
@@ -1514,7 +1514,6 @@ function selectQuickCity(city) {
   padding: 16px 20px 20px;
   display: flex;
   flex-direction: column;
-  max-width: 1200px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
@@ -2281,11 +2280,11 @@ function selectQuickCity(city) {
 
 .result-card-wrapper {
   flex-shrink: 0;
-  width: 520px;
+  width: 580px;
   
   @media (max-width: 900px) {
     width: 100%;
-    max-width: 520px;
+    max-width: 580px;
   }
 }
 
@@ -2295,7 +2294,8 @@ function selectQuickCity(city) {
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border-radius: 20px;
-  overflow: hidden;
+  overflow-x: visible;
+  overflow-y: hidden;
   animation: fadeInUp 0.4s ease;
   box-shadow: 
     0 0 30px rgba(59, 130, 246, 0.08),
@@ -2341,6 +2341,7 @@ function selectQuickCity(city) {
   padding: 20px 24px;
   max-height: 560px;
   overflow-y: auto;
+  overflow-x: visible;
   
   &::-webkit-scrollbar {
     width: 4px;
@@ -2636,11 +2637,16 @@ function selectQuickCity(city) {
 
 .chart-wheel-container {
   width: 100%;
+  max-width: 650px;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 550px;
+  min-height: 500px;
   height: auto;
+  margin: 0 auto;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .chart-mode-switch {

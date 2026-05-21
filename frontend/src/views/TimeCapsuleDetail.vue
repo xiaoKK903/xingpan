@@ -99,7 +99,7 @@
           </div>
 
           <div v-if="capsule.is_opened" class="opened-info">
-            <el-icon><CheckCircle /></el-icon>
+            <el-icon><CircleCheck /></el-icon>
             <span>已于 {{ formatDate(capsule.opened_at) }} 打开</span>
           </div>
         </div>
@@ -159,7 +159,7 @@ import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, Loading, Lock, Unlock, User, Calendar, 
   Clock, Edit, Delete, Warning, ChatDotSquare, 
-  Document, CheckCircle, UserFilled
+  Document, CircleCheck, UserFilled
 } from '@element-plus/icons-vue'
 import { timeCapsuleApi } from '@/api'
 

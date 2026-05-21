@@ -1,1039 +1,680 @@
 <template>
   <div class="chart-wheel-wrapper">
-    <svg 
-      :viewBox="`0 0 ${viewBoxSize} ${viewBoxSize}`"
-      class="chart-wheel-svg"
+    <button class="zoom-btn" @click="openFullscreenModal" title="全屏放大星盘">
+      <span class="zoom-icon">🔍</span>
+    </button>
+    <svg
+      :viewBox="`0 0 ${V} ${V}`"
+      class="chart-svg"
       :width="size"
       :height="size"
       shape-rendering="geometricPrecision"
       text-rendering="geometricPrecision"
     >
       <defs>
-        <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" style="stop-color:#12122a;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#080814;stop-opacity:1" />
-        </radialGradient>
-        
-        <filter id="softShadow">
-          <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#000" flood-opacity="0.5"/>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="1.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-        
         <filter id="planetGlow">
-          <feGaussianBlur stdDeviation="1.5" result="blur"/>
+          <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
           <feMerge>
-            <feMergeNode in="blur"/>
+            <feMergeNode in="coloredBlur"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        
-        <marker id="leaderArrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-          <circle cx="3" cy="3" r="2" fill="rgba(255,255,255,0.4)"/>
-        </marker>
       </defs>
+
+      <!-- 最外层背景 -->
+      <circle :cx="CX" :cy="CY" :r="R + 35" fill="#000" />
       
-      <circle :cx="center" :cy="center" :r="outerR" fill="url(#bgGrad)" stroke="rgba(100, 80, 160, 0.25)" stroke-width="1"/>
+      <!-- 外圈刻度圆环 -->
+      <circle :cx="CX" :cy="CY" :r="R + 30" fill="none" stroke="#222" stroke-width="20"/>
       
-      <template v-if="hasChartData">
-        <g v-if="majorAspects.length > 0" class="aspect-lines">
-          <line
-            v-for="(aspect, index) in majorAspects"
-            :key="'aspect-' + index"
-            :x1="center + (aspectLineR) * cos(degToRad(getPlanetLongitude(aspect.planet1) - 90))"
-            :y1="center + (aspectLineR) * sin(degToRad(getPlanetLongitude(aspect.planet1) - 90))"
-            :x2="center + (aspectLineR) * cos(degToRad(getPlanetLongitude(aspect.planet2) - 90))"
-            :y2="center + (aspectLineR) * sin(degToRad(getPlanetLongitude(aspect.planet2) - 90))"
-            :stroke="getAspectColor(aspect.aspect)"
-            :stroke-width="getAspectWidth(aspect.aspect)"
-            :stroke-dasharray="getAspectDash(aspect.aspect)"
-            :opacity="getAspectOrbOpacity(aspect)"
-            :style="{'z-index': 1}"
-          />
-        </g>
-        
-        <circle :cx="center" :cy="center" :r="zodiacOuterR" fill="none" stroke="rgba(80, 60, 140, 0.06)" stroke-width="0.5"/>
-        <circle :cx="center" :cy="center" :r="zodiacInnerR" fill="none" stroke="rgba(80, 60, 140, 0.08)" stroke-width="0.5"/>
-        
-        <g class="zodiac-signs">
-          <line
-            v-for="index in 12"
-            :key="'zodiac-line-' + index"
-            :x1="center + zodiacOuterR * cos(degToRad(index * 30 - 90))"
-            :y1="center + zodiacOuterR * sin(degToRad(index * 30 - 90))"
-            :x2="center + zodiacInnerR * cos(degToRad(index * 30 - 90))"
-            :y2="center + zodiacInnerR * sin(degToRad(index * 30 - 90))"
-            stroke="rgba(100, 80, 160, 0.1)"
-            stroke-width="0.5"
-          />
-          
-          <text
-            v-for="(sign, index) in zodiacSigns"
-            :key="'zodiac-sym-' + index"
-            :x="center + zodiacMidR * cos(degToRad(index * 30 + 15 - 90))"
-            :y="center + zodiacMidR * sin(degToRad(index * 30 + 15 - 90))"
-            :fill="sign.color"
-            font-size="15"
-            font-weight="500"
-            text-anchor="middle"
-            dominant-baseline="middle"
-            opacity="0.5"
-          >
-            {{ sign.symbol }}
-          </text>
-          
-          <text
-            v-for="index in 12"
-            :key="'zodiac-deg-' + index"
-            :x="center + (zodiacOuterR - 3) * cos(degToRad(index * 30 - 90))"
-            :y="center + (zodiacOuterR - 3) * sin(degToRad(index * 30 - 90))"
-            fill="rgba(147, 112, 219, 0.2)"
-            font-size="6"
-            text-anchor="middle"
-            dominant-baseline="middle"
-          >
-            {{ index * 30 }}°
-          </text>
-        </g>
-        
-        <circle :cx="center" :cy="center" :r="houseOuterR" fill="none" stroke="rgba(80, 60, 140, 0.06)" stroke-width="0.5"/>
-        <circle :cx="center" :cy="center" :r="houseInnerR" fill="none" stroke="rgba(80, 60, 140, 0.04)" stroke-width="0.5"/>
-        
-        <g class="houses">
-          <line
-            v-for="(cusp, index) in houseCusps"
-            :key="'house-line-' + index"
-            :x1="center + houseOuterR * cos(degToRad(cusp - 90))"
-            :y1="center + houseOuterR * sin(degToRad(cusp - 90))"
-            :x2="center + houseInnerR * cos(degToRad(cusp - 90))"
-            :y2="center + houseInnerR * sin(degToRad(cusp - 90))"
-            :stroke="isAscendant(index) ? '#22c55e' : 'rgba(100, 80, 160, 0.12)'"
-            :stroke-width="isAscendant(index) ? 1.5 : 0.5"
-            stroke-linecap="round"
-          />
-          
-          <text
-            v-for="index in 12"
-            :key="'house-num-' + index"
-            :x="center + houseMidR * cos(degToRad(getHouseMidAngle(index - 1) - 90))"
-            :y="center + houseMidR * sin(degToRad(getHouseMidAngle(index - 1) - 90))"
-            fill="rgba(147, 112, 219, 0.35)"
-            font-size="9"
-            font-weight="500"
-            text-anchor="middle"
-            dominant-baseline="middle"
-          >
-            {{ index }}
-          </text>
-        </g>
-        
-        <g class="angles">
-          <g v-if="ascendantLongitude != null">
-            <line
-              :x1="center + (houseOuterR + 5) * cos(degToRad(ascendantLongitude - 90))"
-              :y1="center + (houseOuterR + 5) * sin(degToRad(ascendantLongitude - 90))"
-              :x2="center + (centerR + 25) * cos(degToRad(ascendantLongitude - 90))"
-              :y2="center + (centerR + 25) * sin(degToRad(ascendantLongitude - 90))"
-              stroke="#22c55e"
-              stroke-width="3"
-              stroke-linecap="round"
-              opacity="0.95"
-            />
-            <line
-              :x1="center + (houseOuterR + 5) * cos(degToRad(ascendantLongitude - 90))"
-              :y1="center + (houseOuterR + 5) * sin(degToRad(ascendantLongitude - 90))"
-              :x2="center + (zodiacOuterR - 10) * cos(degToRad(ascendantLongitude - 90))"
-              :y2="center + (zodiacOuterR - 10) * sin(degToRad(ascendantLongitude - 90))"
-              stroke="#22c55e"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-dasharray="8,4"
-              opacity="0.7"
-            />
-            <g>
-              <circle
-                :cx="center + (centerR + 20) * cos(degToRad(ascendantLongitude - 90))"
-                :cy="center + (centerR + 20) * sin(degToRad(ascendantLongitude - 90))"
-                r="15"
-                fill="rgba(15, 15, 35, 0.98)"
-                stroke="#22c55e"
-                stroke-width="2"
-              />
-              <text
-                :x="center + (centerR + 20) * cos(degToRad(ascendantLongitude - 90))"
-                :y="center + (centerR + 20) * sin(degToRad(ascendantLongitude - 90))"
-                fill="#22c55e"
-                font-size="12"
-                font-weight="bold"
-                text-anchor="middle"
-                dominant-baseline="middle"
-              >
-                AC
-              </text>
-            </g>
-          </g>
-          
-          <g v-if="midheavenLongitude != null">
-            <line
-              :x1="center + (houseOuterR + 5) * cos(degToRad(midheavenLongitude - 90))"
-              :y1="center + (houseOuterR + 5) * sin(degToRad(midheavenLongitude - 90))"
-              :x2="center + (centerR + 25) * cos(degToRad(midheavenLongitude - 90))"
-              :y2="center + (centerR + 25) * sin(degToRad(midheavenLongitude - 90))"
-              stroke="#f59e0b"
-              stroke-width="3"
-              stroke-linecap="round"
-              opacity="0.95"
-            />
-            <line
-              :x1="center + (houseOuterR + 5) * cos(degToRad(midheavenLongitude - 90))"
-              :y1="center + (houseOuterR + 5) * sin(degToRad(midheavenLongitude - 90))"
-              :x2="center + (zodiacOuterR - 10) * cos(degToRad(midheavenLongitude - 90))"
-              :y2="center + (zodiacOuterR - 10) * sin(degToRad(midheavenLongitude - 90))"
-              stroke="#f59e0b"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-dasharray="8,4"
-              opacity="0.7"
-            />
-            <g>
-              <circle
-                :cx="center + (centerR + 20) * cos(degToRad(midheavenLongitude - 90))"
-                :cy="center + (centerR + 20) * sin(degToRad(midheavenLongitude - 90))"
-                r="15"
-                fill="rgba(15, 15, 35, 0.98)"
-                stroke="#f59e0b"
-                stroke-width="2"
-              />
-              <text
-                :x="center + (centerR + 20) * cos(degToRad(midheavenLongitude - 90))"
-                :y="center + (centerR + 20) * sin(degToRad(midheavenLongitude - 90))"
-                fill="#f59e0b"
-                font-size="12"
-                font-weight="bold"
-                text-anchor="middle"
-                dominant-baseline="middle"
-              >
-                MC
-              </text>
-            </g>
-          </g>
-        </g>
-        
-        <g class="planet-leader-lines" v-if="planetLayouts.length > 0">
-          <line
-            v-for="layout in planetLayouts.filter(l => l.needsLeader)"
-            :key="'leader-' + layout.planet.name"
-            :x1="layout.leaderStartX"
-            :y1="layout.leaderStartY"
-            :x2="layout.leaderEndX"
-            :y2="layout.leaderEndY"
-            stroke="rgba(255, 255, 255, 0.25)"
-            stroke-width="0.8"
-            stroke-dasharray="3,3"
-            stroke-linecap="round"
-          />
-          <circle
-            v-for="layout in planetLayouts.filter(l => l.needsLeader)"
-            :key="'leader-dot-' + layout.planet.name"
-            :cx="layout.leaderStartX"
-            :cy="layout.leaderStartY"
-            r="2.5"
-            fill="rgba(255, 255, 255, 0.4)"
-          />
-        </g>
-        
-        <g class="planets">
-          <g v-for="layout in planetLayouts" :key="'planet-grp-' + layout.planet.name">
-            <circle
-              :cx="center + planetR * cos(degToRad(layout.planet.longitude - 90))"
-              :cy="center + planetR * sin(degToRad(layout.planet.longitude - 90))"
-              :r="getPlanetSize(layout.planet.name)"
-              :fill="getPlanetInfo(layout.planet.name).bg"
-              :stroke="getPlanetInfo(layout.planet.name).border"
-              stroke-width="1.5"
-              filter="url(#planetGlow)"
-            />
-            <text
-              :cx="center + planetR * cos(degToRad(layout.planet.longitude - 90))"
-              :cy="center + planetR * sin(degToRad(layout.planet.longitude - 90))"
-              :fill="getPlanetInfo(layout.planet.name).text"
-              :font-size="getPlanetSymbolSize(layout.planet.name)"
-              font-weight="bold"
-              text-anchor="middle"
-              dominant-baseline="middle"
-            >
-              {{ getPlanetInfo(layout.planet.name).symbol }}
-            </text>
-            
-            <g v-if="layout.planet.zodiac" class="planet-label">
-              <g :transform="getLayoutTransform(layout)">
-                <rect
-                  x="-36"
-                  y="-9"
-                  width="72"
-                  height="18"
-                  rx="5"
-                  fill="rgba(15, 15, 35, 0.98)"
-                  :stroke="layout.needsLeader ? 'rgba(255, 255, 255, 0.15)' : 'rgba(100, 80, 160, 0.2)'"
-                  stroke-width="0.8"
-                />
-                <text
-                  x="0"
-                  y="1"
-                  fill="rgba(255, 255, 255, 0.95)"
-                  font-size="9"
-                  font-weight="600"
-                  text-anchor="middle"
-                  dominant-baseline="middle"
-                >
-                  {{ layout.planet.zodiac?.sign_symbol }} {{ layout.planet.zodiac?.dms?.degrees }}°{{ layout.planet.zodiac?.dms?.minutes }}'
-                </text>
-              </g>
-            </g>
-            
-            <text
-              v-if="layout.planet.is_retrograde"
-              :x="center + planetR * cos(degToRad(layout.planet.longitude - 90))"
-              :y="center + planetR * sin(degToRad(layout.planet.longitude - 90)) + 18"
-              fill="#ef4444"
-              font-size="8"
-              font-weight="bold"
-              text-anchor="middle"
-            >
-              R
-            </text>
-          </g>
-        </g>
-        
-        <circle :cx="center" :cy="center" :r="centerR" fill="url(#bgGrad)" stroke="rgba(100, 80, 160, 0.15)" stroke-width="1"/>
-        
-        <g class="center-info">
-          <text
-            v-if="chartData.ascendant"
-            :x="center"
-            :y="center - 12"
-            fill="rgba(255, 255, 255, 0.85)"
-            font-size="11"
-            font-weight="600"
-            text-anchor="middle"
-          >
-            AC {{ chartData.ascendant.sign_symbol }}
-          </text>
-          <text
-            v-if="chartData.sun_sign"
-            :x="center"
-            :y="center + 3"
-            fill="#f97316"
-            font-size="11"
-            font-weight="600"
-            text-anchor="middle"
-          >
-            ☉ {{ chartData.sun_sign.sign_symbol }}
-          </text>
-          <text
-            v-if="chartData.moon_sign"
-            :x="center"
-            :y="center + 18"
-            fill="#60a5fa"
-            font-size="11"
-            font-weight="600"
-            text-anchor="middle"
-          >
-            ☽ {{ chartData.moon_sign.sign_symbol }}
-          </text>
-        </g>
-      </template>
-      
-      <g v-else>
-        <text :x="center" :y="center" fill="rgba(255, 255, 255, 0.4)" font-size="16" text-anchor="middle" dominant-baseline="middle">
-          暂无星盘数据
-        </text>
+      <!-- 外圈刻度线 -->
+      <g v-for="i in 360" :key="'tick-'+i">
+        <line
+          v-if="i % 15 === 0"
+          :x1="pol(R + 22, i).x" :y1="pol(R + 22, i).y"
+          :x2="pol(R + 26, i).x" :y2="pol(R + 26, i).y"
+          stroke="#333" stroke-width="0.5"
+        />
       </g>
-    </svg>
-    
-    <div v-if="showLegend && hasChartData" class="chart-legend">
-      <div class="legend-section">
-        <div class="legend-title">行星位置</div>
-        <div class="legend-grid">
-          <div class="legend-item" v-for="planet in mainPlanets" :key="planet.name">
-            <span class="legend-sym-wrap" :style="{ background: getPlanetInfo(planet.name).bg }">
-              <span class="legend-symbol" :style="{ color: getPlanetInfo(planet.name).text }">
-                {{ getPlanetInfo(planet.name).symbol }}
-              </span>
-            </span>
-            <div class="legend-info">
-              <span class="legend-name">{{ planet.name }}</span>
-              <span class="legend-detail">
-                {{ planet.zodiac?.sign_symbol }} {{ planet.zodiac?.dms?.degrees }}°{{ planet.zodiac?.dms?.minutes }}'
-                <span class="legend-house">第{{ planet.house }}宫</span>
-                <span v-if="planet.is_retrograde" class="legend-retro">R</span>
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
       
-      <div v-if="majorAspects.length > 0" class="legend-section">
-        <div class="legend-title">主要相位 (按容许度排序)</div>
-        <div class="legend-grid">
-          <div class="legend-item aspect-item" v-for="(aspect, index) in sortedAspects.slice(0, 12)" :key="index">
-            <div class="aspect-planets">
-              <span class="legend-sym-wrap small" :style="{ background: getPlanetInfo(aspect.planet1)?.bg }">
-                <span class="legend-symbol small" :style="{ color: getPlanetInfo(aspect.planet1)?.text }">
-                  {{ getPlanetInfo(aspect.planet1)?.symbol }}
-                </span>
-              </span>
-              <span class="aspect-arrow" :style="{ color: getAspectColor(aspect.aspect), opacity: getAspectOrbOpacity(aspect) }">
-                {{ getAspectSymbol(aspect.aspect) }}
-              </span>
-              <span class="legend-sym-wrap small" :style="{ background: getPlanetInfo(aspect.planet2)?.bg }">
-                <span class="legend-symbol small" :style="{ color: getPlanetInfo(aspect.planet2)?.text }">
-                  {{ getPlanetInfo(aspect.planet2)?.symbol }}
-                </span>
-              </span>
-            </div>
-            <div class="aspect-info">
-              <span class="aspect-name">{{ aspect.aspect }}</span>
-              <span class="aspect-orb" :style="{ opacity: 0.3 + 0.5 * (1 - aspect.orb / 8) }">容许度: {{ aspect.orb.toFixed(1) }}°</span>
-            </div>
+      <!-- 主盘背景 -->
+      <circle :cx="CX" :cy="CY" :r="R" fill="#000" stroke="#333" stroke-width="2"/>
+
+      <!-- 中心小圆 -->
+      <circle :cx="CX" :cy="CY" r="2" fill="#666" stroke="#888" stroke-width="1"/>
+
+      <template v-if="ready">
+        <!-- 宫位分隔线（淡黄色，连到圆心） -->
+        <line
+          v-for="(h, i) in houses"
+          :key="'hl'+i"
+          :x1="CX" :y1="CY"
+          :x2="pol(R + 25, h.cusp).x" :y2="pol(R + 25, h.cusp).y"
+          :stroke="isAxisCusp(i) ? '#8a7500' : '#5a5000'" 
+          :stroke-width="isAxisCusp(i) ? 1 : 0.6"
+        />
+
+        <!-- 星座刻度线 -->
+        <line
+          v-for="s in zodiacs"
+          :key="'zn-line-'+s.name"
+          :x1="pol(R + 15, s.deg).x" :y1="pol(R + 15, s.deg).y"
+          :x2="pol(R + 25, s.deg).x" :y2="pol(R + 25, s.deg).y"
+          stroke="#555" stroke-width="0.5"
+        />
+
+        <!-- 星座刻度标记（蓝色小菱形） -->
+        <polygon
+          v-for="s in zodiacs"
+          :key="'zn-diamond-'+s.name"
+          :points="diamond(s.deg)"
+          fill="#444"
+        />
+
+        <!-- 外圈星座名称 -->
+        <text
+          v-for="s in zodiacs"
+          :key="'zn-name-'+s.name"
+          :x="pol(R + 20, s.deg).x" :y="pol(R + 20, s.deg).y"
+          :fill="s.color" font-size="14" font-weight="bold"
+          text-anchor="middle" dominant-baseline="central"
+        >{{ s.name }}</text>
+
+        <!-- 宫位编号 -->
+        <text
+          v-for="(h, i) in houses"
+          :key="'hn'+i"
+          :x="pol(R - 10, (h.cusp + nextCusp(i)) / 2).x"
+          :y="pol(R - 10, (h.cusp + nextCusp(i)) / 2).y"
+          :fill="getHouseNumberColor(i)" font-size="10" font-weight="bold"
+          text-anchor="middle" dominant-baseline="central"
+        >{{ i + 1 }}</text>
+
+        <!-- 四角标记 -->
+        <!-- 上升点 -->
+        <template v-if="asc != null">
+          <line :x1="CX" :y1="CY" :x2="pol(r - 15, asc).x" :y2="pol(r - 15, asc).y"
+                stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+          <text :x="pol(r - 28, asc).x" :y="pol(r - 28, asc).y"
+                fill="#ff6b6b" font-size="12" font-weight="bold" text-anchor="middle">升</text>
+          <circle :cx="pol(r - 8, asc).x" :cy="pol(r - 8, asc).y" r="4" fill="#ff6b6b" stroke="#fff" stroke-width="1"/>
+        </template>
+        
+        <!-- 下降点 -->
+        <template v-if="asc != null">
+          <line :x1="CX" :y1="CY" :x2="pol(r - 15, (asc + 180) % 360).x" :y2="pol(r - 15, (asc + 180) % 360).y"
+                stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+          <text :x="pol(r - 28, (asc + 180) % 360).x" :y="pol(r - 28, (asc + 180) % 360).y"
+                fill="#4ecdc4" font-size="12" font-weight="bold" text-anchor="middle">降</text>
+          <circle :cx="pol(r - 8, (asc + 180) % 360).x" :cy="pol(r - 8, (asc + 180) % 360).y" r="4" fill="#4ecdc4" stroke="#fff" stroke-width="1"/>
+        </template>
+
+        <!-- 天顶 -->
+        <template v-if="mc != null">
+          <line :x1="CX" :y1="CY" :x2="pol(r - 15, mc).x" :y2="pol(r - 15, mc).y"
+                stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+          <text :x="pol(r - 28, mc).x" :y="pol(r - 28, mc).y"
+                fill="#ffe66d" font-size="12" font-weight="bold" text-anchor="middle">顶</text>
+          <circle :cx="pol(r - 8, mc).x" :cy="pol(r - 8, mc).y" r="4" fill="#ffe66d" stroke="#fff" stroke-width="1"/>
+        </template>
+        
+        <!-- 天底 -->
+        <template v-if="mc != null">
+          <line :x1="CX" :y1="CY" :x2="pol(r - 15, (mc + 180) % 360).x" :y2="pol(r - 15, (mc + 180) % 360).y"
+                stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+          <text :x="pol(r - 28, (mc + 180) % 360).x" :y="pol(r - 28, (mc + 180) % 360).y"
+                fill="#a29bfe" font-size="12" font-weight="bold" text-anchor="middle">底</text>
+          <circle :cx="pol(r - 8, (mc + 180) % 360).x" :cy="pol(r - 8, (mc + 180) % 360).y" r="4" fill="#a29bfe" stroke="#fff" stroke-width="1"/>
+        </template>
+
+        <!-- 相位线 -->
+        <line
+          v-for="(a, i) in aspects"
+          :key="'as'+i"
+          :x1="pol(pR, a.x1).x" :y1="pol(pR, a.x1).y"
+          :x2="pol(pR, a.x2).x" :y2="pol(pR, a.x2).y"
+          :stroke="a.color" :stroke-width="a.width"
+          :stroke-dasharray="a.dash"
+          :opacity="a.opacity" stroke-linecap="round"
+        />
+
+        <!-- 行星连接线 -->
+        <line
+          v-for="p in displayPlanets"
+          :key="'pl'+p.name"
+          :x1="pol(pR, p.lng).x" :y1="pol(pR, p.lng).y"
+          :x2="pol(pR + p.labelOffset + 8, p.lng).x" :y2="pol(pR + p.labelOffset + 8, p.lng).y"
+          :stroke="p.color" stroke-width="1" stroke-linecap="round"
+        />
+
+        <!-- 行星 -->
+        <g v-for="p in displayPlanets" :key="'p'+p.name">
+          <circle
+            :cx="pol(pR, p.lng).x" :cy="pol(pR, p.lng).y"
+            :r="p.size" :fill="p.color" stroke="#fff" stroke-width="0.8"
+            filter="url(#planetGlow)"
+          />
+          <text
+            :x="pol(pR + p.labelOffset + 18, p.lng).x" :y="pol(pR + p.labelOffset + 18, p.lng).y"
+            :fill="p.color" font-size="13" font-weight="bold"
+            :text-anchor="anchor(p.lng)" dominant-baseline="central"
+          >{{ p.label }}</text>
+        </g>
+
+        <!-- 中心点 -->
+        <circle :cx="CX" :cy="CY" r="2.5" fill="#666" stroke="#888" stroke-width="1"/>
+      </template>
+    </svg>
+
+    <!-- 全屏弹窗 -->
+    <Transition name="modal">
+      <div v-if="showModal" class="modal-overlay" @click="closeFullscreenModal">
+        <div class="modal-content" @click.stop>
+          <button class="close-btn" @click="closeFullscreenModal">
+            <span class="close-icon">✕</span>
+          </button>
+          <div class="modal-chart-container">
+            <svg
+              :viewBox="`0 0 ${V} ${V}`"
+              class="modal-chart-svg"
+              :width="modalSize"
+              :height="modalSize"
+              shape-rendering="geometricPrecision"
+              text-rendering="geometricPrecision"
+            >
+              <defs>
+                <filter id="modalGlow">
+                  <feGaussianBlur stdDeviation="1.5" result="b"/>
+                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="modalPlanetGlow">
+                  <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+                  <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <circle :cx="CX" :cy="CY" :r="R + 35" fill="#000" />
+              <circle :cx="CX" :cy="CY" :r="R + 30" fill="none" stroke="#222" stroke-width="20"/>
+              <!-- 外圈刻度线 -->
+              <g v-for="i in 360" :key="'modal-tick-'+i">
+                <line
+                  v-if="i % 15 === 0"
+                  :x1="pol(R + 22, i).x" :y1="pol(R + 22, i).y"
+                  :x2="pol(R + 26, i).x" :y2="pol(R + 26, i).y"
+                  stroke="#333" stroke-width="0.5"
+                />
+              </g>
+              <circle :cx="CX" :cy="CY" :r="R" fill="#000" stroke="#333" stroke-width="2"/>
+
+              <!-- 中心小圆 -->
+              <circle :cx="CX" :cy="CY" r="2" fill="#666" stroke="#888" stroke-width="1"/>
+
+              <template v-if="ready">
+                <!-- 宫位分隔线（淡黄色，连到圆心） -->
+                <line
+                  v-for="(h, i) in houses"
+                  :key="'modal-hl'+i"
+                  :x1="CX" :y1="CY"
+                  :x2="pol(R + 25, h.cusp).x" :y2="pol(R + 25, h.cusp).y"
+                  :stroke="isAxisCusp(i) ? '#8a7500' : '#5a5000'" 
+                  :stroke-width="isAxisCusp(i) ? 1 : 0.6"
+                />
+
+                <!-- 星座刻度线 -->
+                <line
+                  v-for="s in zodiacs"
+                  :key="'modal-zn-line-'+s.name"
+                  :x1="pol(R + 15, s.deg).x" :y1="pol(R + 15, s.deg).y"
+                  :x2="pol(R + 25, s.deg).x" :y2="pol(R + 25, s.deg).y"
+                  stroke="#555" stroke-width="0.5"
+                />
+
+                <!-- 星座刻度标记（暗色小菱形） -->
+                <polygon
+                  v-for="s in zodiacs"
+                  :key="'modal-zn-diamond-'+s.name"
+                  :points="diamond(s.deg)"
+                  fill="#444"
+                />
+
+                <text
+                  v-for="s in zodiacs"
+                  :key="'modal-zn-'+s.name"
+                  :x="pol(R + 20, s.deg).x" :y="pol(R + 20, s.deg).y"
+                  :fill="s.color" font-size="14" font-weight="bold"
+                  text-anchor="middle" dominant-baseline="central"
+                >{{ s.name }}</text>
+
+                <text
+                  v-for="(h, i) in houses"
+                  :key="'modal-hn'+i"
+                  :x="pol(R - 10, (h.cusp + nextCusp(i)) / 2).x"
+                  :y="pol(R - 10, (h.cusp + nextCusp(i)) / 2).y"
+                  :fill="getHouseNumberColor(i)" font-size="10" font-weight="bold"
+                  text-anchor="middle" dominant-baseline="central"
+                >{{ i + 1 }}</text>
+
+                <template v-if="asc != null">
+                  <line :x1="CX" :y1="CY" :x2="pol(r - 15, asc).x" :y2="pol(r - 15, asc).y"
+                        stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+                  <text :x="pol(r - 28, asc).x" :y="pol(r - 28, asc).y"
+                        fill="#ff6b6b" font-size="12" font-weight="bold" text-anchor="middle">升</text>
+                  <circle :cx="pol(r - 8, asc).x" :cy="pol(r - 8, asc).y" r="4" fill="#ff6b6b" stroke="#fff" stroke-width="1"/>
+                </template>
+
+                <template v-if="asc != null">
+                  <line :x1="CX" :y1="CY" :x2="pol(r - 15, (asc + 180) % 360).x" :y2="pol(r - 15, (asc + 180) % 360).y"
+                        stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+                  <text :x="pol(r - 28, (asc + 180) % 360).x" :y="pol(r - 28, (asc + 180) % 360).y"
+                        fill="#4ecdc4" font-size="12" font-weight="bold" text-anchor="middle">降</text>
+                  <circle :cx="pol(r - 8, (asc + 180) % 360).x" :cy="pol(r - 8, (asc + 180) % 360).y" r="4" fill="#4ecdc4" stroke="#fff" stroke-width="1"/>
+                </template>
+
+                <template v-if="mc != null">
+                  <line :x1="CX" :y1="CY" :x2="pol(r - 15, mc).x" :y2="pol(r - 15, mc).y"
+                        stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+                  <text :x="pol(r - 28, mc).x" :y="pol(r - 28, mc).y"
+                        fill="#ffe66d" font-size="12" font-weight="bold" text-anchor="middle">顶</text>
+                  <circle :cx="pol(r - 8, mc).x" :cy="pol(r - 8, mc).y" r="4" fill="#ffe66d" stroke="#fff" stroke-width="1"/>
+                </template>
+
+                <template v-if="mc != null">
+                  <line :x1="CX" :y1="CY" :x2="pol(r - 15, (mc + 180) % 360).x" :y2="pol(r - 15, (mc + 180) % 360).y"
+                        stroke="#555" stroke-width="0.5" stroke-dasharray="4,3"/>
+                  <text :x="pol(r - 28, (mc + 180) % 360).x" :y="pol(r - 28, (mc + 180) % 360).y"
+                        fill="#a29bfe" font-size="12" font-weight="bold" text-anchor="middle">底</text>
+                  <circle :cx="pol(r - 8, (mc + 180) % 360).x" :cy="pol(r - 8, (mc + 180) % 360).y" r="4" fill="#a29bfe" stroke="#fff" stroke-width="1"/>
+                </template>
+
+                <line
+                  v-for="(a, i) in aspects"
+                  :key="'modal-as'+i"
+                  :x1="pol(pR, a.x1).x" :y1="pol(pR, a.x1).y"
+                  :x2="pol(pR, a.x2).x" :y2="pol(pR, a.x2).y"
+                  :stroke="a.color" :stroke-width="a.width"
+                  :stroke-dasharray="a.dash"
+                  :opacity="a.opacity" stroke-linecap="round"
+                />
+
+                <line
+                  v-for="p in displayPlanets"
+                  :key="'modal-pl'+p.name"
+                  :x1="pol(pR, p.lng).x" :y1="pol(pR, p.lng).y"
+                  :x2="pol(pR + p.labelOffset + 8, p.lng).x" :y2="pol(pR + p.labelOffset + 8, p.lng).y"
+                  :stroke="p.color" stroke-width="1" stroke-linecap="round"
+                />
+
+                <g v-for="p in displayPlanets" :key="'modal-p'+p.name">
+                  <circle
+                    :cx="pol(pR, p.lng).x" :cy="pol(pR, p.lng).y"
+                    :r="p.size" :fill="p.color" stroke="#fff" stroke-width="0.8"
+                    filter="url(#modalPlanetGlow)"
+                  />
+                  <text
+                    :x="pol(pR + p.labelOffset + 18, p.lng).x" :y="pol(pR + p.labelOffset + 18, p.lng).y"
+                    :fill="p.color" font-size="13" font-weight="bold"
+                    :text-anchor="anchor(p.lng)" dominant-baseline="central"
+                  >{{ p.label }}</text>
+                </g>
+
+                <circle :cx="CX" :cy="CY" r="2.5" fill="#666" stroke="#888" stroke-width="1"/>
+              </template>
+            </svg>
           </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
-  chartData: {
-    type: Object,
-    default: null
-  },
-  size: {
-    type: Number,
-    default: 500
-  },
-  showLegend: {
-    type: Boolean,
-    default: true
-  }
+  chartData: { type: Object, default: () => ({}) },
+  size: { type: Number, default: 500 }
 })
 
-const viewBoxSize = 600
-const center = viewBoxSize / 2
+const V = ref(500)
+const showModal = ref(false)
+const modalSize = ref(600)
 
-const outerR = computed(() => center - 10)
-const zodiacOuterR = computed(() => center - 25)
-const zodiacMidR = computed(() => center - 50)
-const zodiacInnerR = computed(() => center - 78)
-const houseOuterR = computed(() => center - 88)
-const houseMidR = computed(() => center - 112)
-const houseInnerR = computed(() => center - 155)
-const planetR = computed(() => center - 132)
-const aspectLineR = computed(() => center - 175)
-const centerR = computed(() => center - 195)
+const CX = computed(() => V.value / 2)
+const CY = computed(() => V.value / 2)
+const R = computed(() => 220)
+const r = computed(() => 80)
+const pR = computed(() => r.value + (R.value - r.value) * 0.55)
 
-const LABEL_WIDTH = 72
-const LABEL_HEIGHT = 18
-const LABEL_PADDING = 4
+function openFullscreenModal() {
+  showModal.value = true
+  document.body.style.overflow = 'hidden'
+  updateModalSize()
+}
 
-const LEVEL_OFFSETS = [
-  { r: 42, angleAdjust: 0, priority: 1 },
-  { r: -35, angleAdjust: 0, priority: 2 },
-  { r: 65, angleAdjust: 4, priority: 0 },
-  { r: -55, angleAdjust: -4, priority: 3 }
+function closeFullscreenModal() {
+  showModal.value = false
+  document.body.style.overflow = ''
+}
+
+function updateModalSize() {
+  const maxSize = Math.min(window.innerWidth - 40, window.innerHeight - 40)
+  modalSize.value = Math.min(maxSize, 700)
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Escape' && showModal.value) {
+    closeFullscreenModal()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', updateModalSize)
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateModalSize)
+  window.removeEventListener('keydown', handleKeydown)
+  document.body.style.overflow = ''
+})
+
+const zodiacs = [
+  { name: '羊', deg: 0, color: '#ff6b6b' },
+  { name: '牛', deg: 30, color: '#ffb347' },
+  { name: '双', deg: 60, color: '#77dd77' },
+  { name: '蟹', deg: 90, color: '#a29bfe' },
+  { name: '狮', deg: 120, color: '#ff6b6b' },
+  { name: '处', deg: 150, color: '#ffe66d' },
+  { name: '秤', deg: 180, color: '#4ecdc4' },
+  { name: '蝎', deg: 210, color: '#ff6b6b' },
+  { name: '射', deg: 240, color: '#ffe66d' },
+  { name: '摩', deg: 270, color: '#a29bfe' },
+  { name: '瓶', deg: 300, color: '#77dd77' },
+  { name: '鱼', deg: 330, color: '#4ecdc4' }
 ]
 
-const planetLayouts = ref([])
-
-const zodiacSigns = [
-  { name: '白羊座', symbol: '♈', color: 'rgba(239, 68, 68, 0.7)' },
-  { name: '金牛座', symbol: '♉', color: 'rgba(34, 197, 94, 0.7)' },
-  { name: '双子座', symbol: '♊', color: 'rgba(234, 179, 8, 0.7)' },
-  { name: '巨蟹座', symbol: '♋', color: 'rgba(59, 130, 246, 0.7)' },
-  { name: '狮子座', symbol: '♌', color: 'rgba(249, 115, 22, 0.7)' },
-  { name: '处女座', symbol: '♍', color: 'rgba(34, 197, 94, 0.7)' },
-  { name: '天秤座', symbol: '♎', color: 'rgba(236, 72, 153, 0.7)' },
-  { name: '天蝎座', symbol: '♏', color: 'rgba(239, 68, 68, 0.7)' },
-  { name: '射手座', symbol: '♐', color: 'rgba(249, 115, 22, 0.7)' },
-  { name: '摩羯座', symbol: '♑', color: 'rgba(107, 114, 128, 0.7)' },
-  { name: '水瓶座', symbol: '♒', color: 'rgba(6, 182, 212, 0.7)' },
-  { name: '双鱼座', symbol: '♓', color: 'rgba(59, 130, 246, 0.7)' }
-]
-
-const planetMap = {
-  '太阳': { symbol: '☉', bg: 'rgba(249, 115, 22, 0.98)', border: '#f97316', text: '#fff', priority: 10 },
-  '月亮': { symbol: '☽', bg: 'rgba(96, 165, 250, 0.98)', border: '#60a5fa', text: '#fff', priority: 9 },
-  '水星': { symbol: '☿', bg: 'rgba(234, 179, 8, 0.98)', border: '#eab308', text: '#fff', priority: 7 },
-  '金星': { symbol: '♀', bg: 'rgba(236, 72, 153, 0.98)', border: '#ec4899', text: '#fff', priority: 8 },
-  '火星': { symbol: '♂', bg: 'rgba(239, 68, 68, 0.98)', border: '#ef4444', text: '#fff', priority: 6 },
-  '木星': { symbol: '♃', bg: 'rgba(249, 115, 22, 0.98)', border: '#f97316', text: '#fff', priority: 5 },
-  '土星': { symbol: '♄', bg: 'rgba(139, 92, 246, 0.98)', border: '#8b5cf6', text: '#fff', priority: 4 },
-  '天王星': { symbol: '♅', bg: 'rgba(6, 182, 212, 0.98)', border: '#06b6d4', text: '#fff', priority: 3 },
-  '海王星': { symbol: '♆', bg: 'rgba(59, 130, 246, 0.98)', border: '#3b82f6', text: '#fff', priority: 2 },
-  '冥王星': { symbol: '♇', bg: 'rgba(107, 114, 128, 0.98)', border: '#6b7280', text: '#fff', priority: 1 },
-  '北交点': { symbol: '☊', bg: 'rgba(34, 197, 94, 0.95)', border: '#22c55e', text: '#fff', priority: 0 },
-  '南交点': { symbol: '☋', bg: 'rgba(239, 68, 68, 0.95)', border: '#ef4444', text: '#fff', priority: 0 }
+const PLANET_INFO = {
+  '太阳': { label: '日', color: '#ffe66d', size: 3.5 },
+  '月亮': { label: '月', color: '#a29bfe', size: 3.5 },
+  '水星': { label: '水', color: '#77dd77', size: 3 },
+  '金星': { label: '金', color: '#ffb347', size: 3 },
+  '火星': { label: '火', color: '#ff6b6b', size: 3 },
+  '木星': { label: '木', color: '#ffe66d', size: 3 },
+  '土星': { label: '土', color: '#a29bfe', size: 3 },
+  '天王星': { label: '天', color: '#77dd77', size: 2.5 },
+  '海王星': { label: '海', color: '#4ecdc4', size: 2.5 },
+  '冥王星': { label: '冥', color: '#ffb347', size: 2.5 },
+  '北交点': { label: '北', color: '#4ecdc4', size: 2.5 },
+  '南交点': { label: '南', color: '#ff6b6b', size: 2.5 },
+  '婚神星': { label: '婚', color: '#ffb347', size: 2.5 },
+  '天顶': { label: '顶', color: '#ffe66d', size: 3 },
+  '福点': { label: '福', color: '#77dd77', size: 2.5 }
 }
 
-const majorPlanetNames = ['太阳', '月亮', '水星', '金星', '火星', '木星', '土星', '天王星', '海王星', '冥王星']
-
-const hasChartData = computed(() => props.chartData && props.chartData.planets)
-
-const mainPlanets = computed(() => {
-  if (!props.chartData?.planets) return []
-  return props.chartData.planets.filter(p => majorPlanetNames.includes(p.name))
-})
-
-const sortedPlanets = computed(() => {
-  return [...mainPlanets.value].sort((a, b) => a.longitude - b.longitude)
-})
-
-const houseCusps = computed(() => props.chartData?.houses?.house_cusps || [])
-
-const ascendantLongitude = computed(() => props.chartData?.houses?.ascendant_longitude)
-
-const midheavenLongitude = computed(() => props.chartData?.houses?.midheaven_longitude)
-
-const aspects = computed(() => props.chartData?.aspects || [])
-
-const majorAspects = computed(() => {
-  const majorAspectNames = ['合相', '对分相', '四分相', '三分相', '六分相']
-  return aspects.value.filter(a => majorAspectNames.includes(a.aspect))
-})
-
-const sortedAspects = computed(() => {
-  return [...majorAspects.value].sort((a, b) => a.orb - b.orb)
-})
-
-function calculateLocalDensity(planet, allPlanets) {
-  const threshold = 45
-  let density = 0
-  allPlanets.forEach(p => {
-    if (p.name === planet.name) return
-    let dist = Math.abs(planet.longitude - p.longitude)
-    if (dist > 180) dist = 360 - dist
-    if (dist < threshold) {
-      density += Math.max(0, 1 - dist / threshold)
-    }
-  })
-  return density
+const ASPECT_INFO = {
+  '合相': { color: '#ff6b6b', width: 2.5, dash: 'none', opacity: 0.85 },
+  '对分相': { color: '#ff6b6b', width: 2, dash: 'none', opacity: 0.8 },
+  '四分相': { color: '#ff6b6b', width: 2, dash: 'none', opacity: 0.8 },
+  '三分相': { color: '#77dd77', width: 2, dash: 'none', opacity: 0.75 },
+  '六分相': { color: '#4ecdc4', width: 1.8, dash: 'none', opacity: 0.7 }
 }
 
-function findClusters(planets) {
-  if (planets.length === 0) return []
-  
-  const clusters = []
-  let currentCluster = [planets[0]]
-  
-  for (let i = 1; i < planets.length; i++) {
-    const prev = planets[i - 1]
-    const curr = planets[i]
-    let dist = Math.abs(curr.longitude - prev.longitude)
-    if (dist > 180) dist = 360 - dist
-    
-    if (dist < 20) {
-      currentCluster.push(curr)
-    } else {
-      if (currentCluster.length > 0) {
-        clusters.push([...currentCluster])
+const MAJOR_PLANETS = ['太阳', '月亮', '水星', '金星', '火星', '木星', '土星', '天王星', '海王星', '冥王星', '北交点', '南交点', '婚神星', '天顶', '福点']
+const MAJOR_ASPECTS = ['合相', '对分相', '四分相', '三分相', '六分相']
+
+const ready = computed(() => props.chartData?.planets?.length > 0)
+
+const rawPlanets = computed(() => props.chartData?.planets || [])
+
+const houses = computed(() => {
+  const h = props.chartData?.houses
+  if (!h) return defHouses()
+  if (!Array.isArray(h)) {
+    const arr = []
+    for (let i = 1; i <= 12; i++) arr.push({ cusp: h[i] || (i - 1) * 30 })
+    return arr
+  }
+  return h.map((v, i) => typeof v === 'object' && v.cusp != null ? v : { cusp: v || i * 30 })
+})
+
+const asc = computed(() => {
+  const p = rawPlanets.value.find(p => p.name === '上升点' || p.name === 'Ascendant')
+  return p?.longitude
+})
+
+const mc = computed(() => {
+  const p = rawPlanets.value.find(p => p.name === '天顶' || p.name === 'Midheaven')
+  return p?.longitude
+})
+
+const displayPlanets = computed(() => {
+  const planets = rawPlanets.value
+    .filter(p => MAJOR_PLANETS.includes(p.name))
+    .map(p => ({
+      name: p.name,
+      lng: p.longitude,
+      label: PLANET_INFO[p.name]?.label || p.name.charAt(0),
+      color: PLANET_INFO[p.name]?.color || '#888',
+      size: PLANET_INFO[p.name]?.size || 3,
+      labelOffset: 0
+    }))
+
+  planets.sort((a, b) => a.lng - b.lng)
+
+  for (let i = 0; i < planets.length; i++) {
+    let offset = 0
+    for (let j = 0; j < i; j++) {
+      const diff = Math.abs(planets[i].lng - planets[j].lng)
+      const normalizedDiff = Math.min(diff, 360 - diff)
+      if (normalizedDiff < 8) {
+        offset += 12
       }
-      currentCluster = [curr]
     }
+    planets[i].labelOffset = offset
   }
-  
-  if (currentCluster.length > 0) {
-    clusters.push(currentCluster)
-  }
-  
-  return clusters
-}
 
-function getLabelCollisionBox(planet, level, rOffset, angleAdjust) {
-  const longitude = planet.longitude + angleAdjust
-  const r = planetR.value + rOffset
-  
-  const centerX = center + r * cos(degToRad(longitude - 90))
-  const centerY = center + r * sin(degToRad(longitude - 90))
-  
-  const halfW = LABEL_WIDTH / 2 + LABEL_PADDING
-  const halfH = LABEL_HEIGHT / 2 + LABEL_PADDING
-  
-  const angleRad = degToRad(longitude - 90)
-  const cosA = Math.cos(angleRad)
-  const sinA = Math.sin(angleRad)
-  
-  const corners = [
-    { x: -halfW, y: -halfH },
-    { x: halfW, y: -halfH },
-    { x: halfW, y: halfH },
-    { x: -halfW, y: halfH }
-  ].map(c => ({
-    x: centerX + c.x * cosA - c.y * sinA,
-    y: centerY + c.x * sinA + c.y * cosA
-  }))
-  
-  const xs = corners.map(c => c.x)
-  const ys = corners.map(c => c.y)
-  
-  return {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ys),
-    centerX,
-    centerY,
-    r,
-    longitude
-  }
-}
+  return planets
+})
 
-function boxesOverlap(box1, box2) {
-  const padding = 2
-  return !(box1.maxX + padding < box2.minX || 
-           box2.maxX + padding < box1.minX || 
-           box1.maxY + padding < box2.minY || 
-           box2.maxY + padding < box1.minY)
-}
-
-function calculateLayouts() {
-  const planets = sortedPlanets.value
-  if (planets.length === 0) {
-    planetLayouts.value = []
-    return
-  }
-  
-  const clusters = findClusters(planets)
-  const layouts = []
-  const usedBoxes = []
-  
-  planets.forEach(planet => {
-    const density = calculateLocalDensity(planet, planets)
-    const isInCluster = density > 0.5
-    
-    let bestLevel = 0
-    let bestBox = null
-    let needsLeader = false
-    
-    const planetPriority = planetMap[planet.name]?.priority || 0
-    
-    const levelsToTry = [...LEVEL_OFFSETS].sort((a, b) => {
-      if (planetPriority >= 8) {
-        return a.priority - b.priority
+const aspects = computed(() => {
+  return (props.chartData?.aspects || [])
+    .filter(a => MAJOR_ASPECTS.includes(a.aspect) && 
+                 MAJOR_PLANETS.includes(a.planet1) && 
+                 MAJOR_PLANETS.includes(a.planet2))
+    .map(a => {
+      const p1 = rawPlanets.value.find(p => p.name === a.planet1)
+      const p2 = rawPlanets.value.find(p => p.name === a.planet2)
+      const info = ASPECT_INFO[a.aspect]
+      return { 
+        x1: p1?.longitude || 0, 
+        x2: p2?.longitude || 0, 
+        color: info?.color || '#666', 
+        width: info?.width || 1,
+        dash: info?.dash || 'none',
+        opacity: info?.opacity || 0.7
       }
-      return a.r > 0 ? -1 : 1
     })
-    
-    for (const level of levelsToTry) {
-      const testBox = getLabelCollisionBox(planet, 0, level.r, level.angleAdjust)
-      
-      let hasCollision = false
-      for (const usedBox of usedBoxes) {
-        if (boxesOverlap(testBox, usedBox)) {
-          hasCollision = true
-          break
-        }
-      }
-      
-      if (!hasCollision) {
-        bestLevel = LEVEL_OFFSETS.indexOf(level)
-        bestBox = testBox
-        needsLeader = Math.abs(level.angleAdjust) > 0 || bestLevel > 1
-        break
-      }
-    }
-    
-    if (!bestBox) {
-      const level = LEVEL_OFFSETS[2]
-      bestBox = getLabelCollisionBox(planet, 2, level.r, level.angleAdjust)
-      bestLevel = 2
-      needsLeader = true
-    }
-    
-    const level = LEVEL_OFFSETS[bestLevel]
-    
-    const trueX = center + planetR.value * cos(degToRad(planet.longitude - 90))
-    const trueY = center + planetR.value * sin(degToRad(planet.longitude - 90))
-    
-    const leaderOffset = level.r > 0 ? 15 : -15
-    const leaderStartX = center + (planetR.value + leaderOffset) * cos(degToRad(planet.longitude - 90))
-    const leaderStartY = center + (planetR.value + leaderOffset) * sin(degToRad(planet.longitude - 90))
-    
-    const labelCenterX = bestBox.centerX
-    const labelCenterY = bestBox.centerY
-    
-    const angleToCenter = Math.atan2(labelCenterY - center, labelCenterX - center)
-    const leaderEndR = level.r > 0 
-      ? planetR.value + level.r - 20 
-      : planetR.value + level.r + 20
-    
-    const leaderEndX = center + leaderEndR * Math.cos(angleToCenter)
-    const leaderEndY = center + leaderEndR * Math.sin(angleToCenter)
-    
-    const layout = {
-      planet,
-      level: bestLevel,
-      rOffset: level.r,
-      angleAdjust: level.angleAdjust,
-      box: bestBox,
-      needsLeader: needsLeader && isInCluster,
-      trueX,
-      trueY,
-      leaderStartX,
-      leaderStartY,
-      leaderEndX,
-      leaderEndY,
-      labelCenterX,
-      labelCenterY
-    }
-    
-    layouts.push(layout)
-    usedBoxes.push(bestBox)
-  })
-  
-  planetLayouts.value = layouts
+})
+
+function defHouses() {
+  return Array.from({ length: 12 }, (_, i) => ({ cusp: i * 30 }))
 }
 
-watch([sortedPlanets, planetR], () => {
-  calculateLayouts()
-}, { immediate: true, deep: true })
-
-function degToRad(deg) {
-  return deg * Math.PI / 180
+function pol(radius, deg) {
+  const rad = (deg - 90) * Math.PI / 180
+  return { x: CX.value + radius * Math.cos(rad), y: CY.value + radius * Math.sin(rad) }
 }
 
-function cos(rad) {
-  return Math.cos(rad)
+function diamond(deg) {
+  const center = pol(R + 20, deg)
+  const rad = (deg - 90) * Math.PI / 180
+  const perpRad = rad + Math.PI / 2
+  const size = 4
+  const p1 = { x: center.x + Math.cos(rad) * size, y: center.y + Math.sin(rad) * size }
+  const p2 = { x: center.x + Math.cos(perpRad) * size, y: center.y + Math.sin(perpRad) * size }
+  const p3 = { x: center.x - Math.cos(rad) * size, y: center.y - Math.sin(rad) * size }
+  const p4 = { x: center.x - Math.cos(perpRad) * size, y: center.y - Math.sin(perpRad) * size }
+  return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`
 }
 
-function sin(rad) {
-  return Math.sin(rad)
+function nextCusp(i) {
+  return houses.value[(i + 1) % 12]?.cusp || 0
 }
 
-function isAscendant(index) {
-  if (houseCusps.value.length === 0 || ascendantLongitude.value == null) return false
-  return Math.abs(houseCusps.value[index] - ascendantLongitude.value) < 0.1
+function anchor(lng) {
+  const a = lng % 360
+  if (a > 45 && a < 135) return 'start'
+  if (a > 225 && a < 315) return 'end'
+  return 'middle'
 }
 
-function getHouseMidAngle(index) {
-  const cusps = houseCusps.value
-  if (cusps.length === 0) return index * 30
-  const currentCusp = cusps[index]
-  const nextCusp = cusps[(index + 1) % 12]
-  let mid = (currentCusp + nextCusp) / 2
-  if (Math.abs(nextCusp - currentCusp) > 180) {
-    mid = (currentCusp + nextCusp + 360) / 2
-  }
-  return mid % 360
+function getHouseNumberColor(index) {
+  const colors = ['#ff6b6b', '#ffb347', '#77dd77', '#a29bfe', '#ffe66d', '#4ecdc4']
+  return colors[index % 6]
 }
 
-function getPlanetLongitude(name) {
-  const planet = mainPlanets.value?.find(p => p.name === name)
-  return planet?.longitude || 0
-}
-
-function getPlanetInfo(name) {
-  return planetMap[name] || { symbol: '★', bg: 'rgba(139, 92, 246, 0.9)', border: '#8b5cf6', text: '#fff' }
-}
-
-function getPlanetSize(name) {
-  const sizes = {
-    '太阳': 12,
-    '月亮': 11,
-    '水星': 7,
-    '金星': 8,
-    '火星': 7,
-    '木星': 10,
-    '土星': 9,
-    '天王星': 7,
-    '海王星': 7,
-    '冥王星': 6
-  }
-  return sizes[name] || 7
-}
-
-function getPlanetSymbolSize(name) {
-  const sizes = {
-    '太阳': 13,
-    '月亮': 12,
-    '水星': 8,
-    '金星': 9,
-    '火星': 8,
-    '木星': 11,
-    '土星': 10,
-    '天王星': 8,
-    '海王星': 8,
-    '冥王星': 7
-  }
-  return sizes[name] || 8
-}
-
-function getLayoutTransform(layout) {
-  return `translate(${layout.labelCenterX}, ${layout.labelCenterY})`
-}
-
-function getLabelTransform(planet, index) {
-  const longitude = planet.longitude
-  const planetIdx = sortedPlanets.value.findIndex(p => p.name === planet.name)
-  
-  const nearbyPlanets = []
-  sortedPlanets.value.forEach((p, i) => {
-    if (i === planetIdx) return
-    let dist = Math.abs(longitude - p.longitude)
-    if (dist > 180) dist = 360 - dist
-    if (dist < 45) {
-      nearbyPlanets.push({ ...p, index: i, dist })
-    }
-  })
-  
-  const nearbyCount = nearbyPlanets.length
-  let offsetR = 0
-  let angleOffset = 0
-  
-  if (nearbyCount > 0) {
-    const sortedNearby = nearbyPlanets.sort((a, b) => a.dist - b.dist)
-    const closestDist = sortedNearby[0].dist
-    
-    if (closestDist < 20) {
-      const offsetLevel = planetIdx % 3
-      if (offsetLevel === 0) {
-        offsetR = 38
-      } else if (offsetLevel === 1) {
-        offsetR = -38
-        angleOffset = (planetIdx % 2 === 0 ? 1 : -1) * 3
-      } else {
-        offsetR = 55
-        angleOffset = (planetIdx % 2 === 0 ? -1 : 1) * 5
-      }
-    } else if (closestDist < 35) {
-      const offsetLevel = planetIdx % 2
-      if (offsetLevel === 0) {
-        offsetR = 38
-      } else {
-        offsetR = -28
-      }
-    }
-  } else {
-    offsetR = 38
-  }
-  
-  const actualR = planetR.value + offsetR
-  const adjustedLongitude = longitude + angleOffset
-  
-  return `translate(${center + actualR * cos(degToRad(adjustedLongitude - 90))}, ${center + actualR * sin(degToRad(adjustedLongitude - 90))})`
-}
-
-function getAspectColor(aspectName) {
-  const colors = {
-    '合相': '#fbbf24',
-    '对分相': '#ef4444',
-    '四分相': '#f97316',
-    '三分相': '#22c55e',
-    '六分相': '#3b82f6'
-  }
-  return colors[aspectName] || 'rgba(234, 179, 8, 0.5)'
-}
-
-function getAspectWidth(aspectName) {
-  if (aspectName === '合相') return 2.5
-  if (aspectName === '对分相') return 2
-  if (aspectName === '四分相') return 2
-  if (aspectName === '三分相') return 2
-  if (aspectName === '六分相') return 1.5
-  return 1
-}
-
-function getAspectBaseOpacity(aspectName) {
-  if (aspectName === '合相') return 0.85
-  if (aspectName === '对分相') return 0.75
-  if (aspectName === '四分相') return 0.7
-  if (aspectName === '三分相') return 0.7
-  if (aspectName === '六分相') return 0.55
-  return 0.2
-}
-
-function getAspectOrbOpacity(aspect) {
-  const baseOpacity = getAspectBaseOpacity(aspect.aspect)
-  const orb = aspect.orb || 0
-  
-  const maxOrb = 8
-  const normalizedOrb = Math.min(orb / maxOrb, 1)
-  
-  const orbFactor = Math.pow(1 - normalizedOrb, 0.4)
-  
-  return Math.max(0.15, baseOpacity * orbFactor)
-}
-
-function getAspectOpacity(aspectName) {
-  return getAspectBaseOpacity(aspectName)
-}
-
-function getAspectDash(aspectName) {
-  if (aspectName === '合相') return 'none'
-  if (aspectName === '对分相') return '10,5'
-  if (aspectName === '四分相') return '5,5'
-  if (aspectName === '三分相') return '15,8'
-  if (aspectName === '六分相') return '8,6'
-  return 'none'
-}
-
-function getAspectSymbol(aspectName) {
-  const symbols = {
-    '合相': '☌',
-    '六分相': '⚹',
-    '四分相': '□',
-    '三分相': '△',
-    '对分相': '☍'
-  }
-  return symbols[aspectName] || '○'
+function isAxisCusp(index) {
+  const axisPositions = [0, 3, 6, 9]
+  return axisPositions.includes(index)
 }
 </script>
 
 <style scoped>
 .chart-wheel-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
   width: 100%;
-}
-
-.chart-wheel-svg {
-  filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.4));
-  background: radial-gradient(circle at center, rgba(80, 60, 160, 0.03), transparent);
-  border-radius: 50%;
-}
-
-.chart-legend {
-  width: 100%;
-  max-width: 600px;
-  background: rgba(12, 12, 28, 0.9);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(80, 60, 160, 0.2);
-  border-radius: 12px;
-  padding: 20px;
-  margin-top: 8px;
-}
-
-.legend-section {
-  margin-bottom: 20px;
-}
-
-.legend-section:last-child {
-  margin-bottom: 0;
-}
-
-.legend-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(80, 60, 160, 0.15);
-}
-
-.legend-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: rgba(80, 60, 160, 0.04);
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.legend-item:hover {
-  background: rgba(80, 60, 160, 0.08);
-}
-
-.legend-sym-wrap {
-  width: 28px;
-  height: 28px;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
+  position: relative;
+}
+
+.zoom-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-}
-
-.legend-sym-wrap.small {
-  width: 24px;
-  height: 24px;
-}
-
-.legend-symbol {
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.legend-symbol.small {
-  font-size: 11px;
-}
-
-.legend-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
-.legend-name {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.legend-detail {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.legend-house {
-  color: rgba(147, 112, 219, 0.65);
-  margin-left: 4px;
-}
-
-.legend-retro {
-  color: #ef4444;
-  font-weight: bold;
-  margin-left: 4px;
-}
-
-.aspect-item {
-  justify-content: space-between;
-}
-
-.aspect-planets {
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid #444;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
 }
 
-.aspect-arrow {
-  font-size: 14px;
-  font-weight: bold;
+.zoom-btn:hover {
+  background: rgba(50, 50, 50, 0.9);
+  border-color: #666;
+  transform: scale(1.1);
 }
 
-.aspect-info {
+.zoom-icon {
+  font-size: 18px;
+}
+
+.chart-svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: auto;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: pointer;
+  overflow: hidden;
 }
 
-.aspect-name {
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.7);
+.modal-content {
+  background: #000;
+  border-radius: 0;
+  padding: 0;
+  position: relative;
+  cursor: default;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.aspect-orb {
-  font-size: 0.68rem;
-  color: rgba(255, 255, 255, 0.4);
+.close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(50, 50, 50, 0.8);
+  border: 1px solid #555;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.close-btn:hover {
+  background: rgba(70, 70, 70, 0.9);
+  transform: scale(1.1);
+}
+
+.close-icon {
+  color: #fff;
+  font-size: 16px;
+}
+
+.modal-chart-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-chart-svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-active .modal-content,
+.modal-leave-active .modal-content {
+  transition: transform 0.3s ease;
+}
+
+.modal-enter-from .modal-content,
+.modal-leave-to .modal-content {
+  transform: scale(0.9);
 }
 </style>
